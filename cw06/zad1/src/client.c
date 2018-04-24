@@ -169,7 +169,10 @@ void print_help(char *program) {
 	printf("\t%s <file with commands>\n", program);
 	printf("\n");
 	printf("Available commands:\n");
-	printf("\tmirror <text> -- mirror text\n");
+	printf("\tmirror <text> -- mirror the text\n");
+	printf("\tcalc <expr>   -- calculate the expression\n");
+	printf("\ttime          -- send current date and time\n");
+	printf("\tend           -- stop the server\n");
 }
 
 int main(int argc, char **argv) {
