@@ -5,22 +5,48 @@
 
 #include "config.h"
 
+/**
+ * Client ID received from the server.
+ */
 long client_id;
 
+/**
+ * When 1, STOP shall not be sent when exiting.
+ */
+int nostop = 0;
+
+/**
+ * Opened server queue.
+ */
+q_type serv_queue;
+
+/**
+ * Opened client queue.
+ */
+q_type queue;
+
 #ifdef POSIXQ
-mqd_t serv_queue;
-mqd_t queue;
+char *queue_name;
 #else
-int serv_queue;
-int queue;
 key_t queue_key;
 #endif
 
+static int send_to_server(struct msg_t *msg);
+
 static void cleanup(void) {
+	if (!nostop) {
+		struct msg_t msg;
+		msg.client_id = client_id;
+		msg.from = getpid();
+		msg.type = STOP;
+		send_to_server(&msg);
+	}
+	
 #ifdef POSIXQ
 	mq_close(serv_queue);
 	mq_close(queue);
-#error mq_unlink(QUEUE_NAME);
+	mq_unlink(queue_name);
+	free(queue_name);
 #else
 	msgctl(queue, IPC_RMID, NULL);
 #endif
@@ -33,10 +59,24 @@ static void sig_cleanup(int sig) {
 
 // ===================================================================
 
-static void prepare_queue(void) {
+static void prepare_queues(void) {
 	srand(time(NULL));
 #ifdef POSIXQ
-#error
+	queue_name = malloc(sizeof(char) * 255);
+	sprintf(queue_name, QUEUE_PREFIX "%d", rand() ^ getpid());
+	
+	struct mq_attr attr = { 0, 10, MSG_T_SIZE, 0 };
+	queue = mq_open(queue_name, O_RDONLY | O_CREAT | O_EXCL, S_IRWXU, &attr);
+	if (queue == -1) {
+		perror("Cannot create POSIX queue");
+		exit(EXIT_FAILURE);
+	}
+	
+	serv_queue = mq_open(QUEUE_NAME, O_WRONLY);
+	if (serv_queue == -1) {
+		perror("Cannot open server queue");
+		exit(EXIT_FAILURE);
+	}
 #else
 	int proj_id = rand() ^ getpid();
 	queue_key = ftok(home_dir, proj_id);
@@ -44,19 +84,19 @@ static void prepare_queue(void) {
 		perror("Cannot generate key");
 		exit(EXIT_FAILURE);
 	}
-	
+
 	queue = msgget(queue_key, IPC_CREAT | IPC_EXCL | S_IRWXU);
 	if (queue < 0) {
 		perror("Cannot create System V queue");
 		exit(EXIT_FAILURE);
 	}
-	
+
 	key_t serv_key = ftok(home_dir, 'K');
 	if (queue_key == -1) {
 		perror("Cannot generate server key");
 		exit(EXIT_FAILURE);
 	}
-	
+
 	serv_queue = msgget(serv_key, S_IRWXU);
 	if (serv_queue < 0) {
 		perror("Cannot open server queue");
@@ -65,9 +105,11 @@ static void prepare_queue(void) {
 #endif
 }
 
-static int respond_server(struct msg_t *msg) {
+static int send_to_server(struct msg_t *msg) {
 #ifdef POSIXQ
-#error
+	if (mq_send(serv_queue, (char*) msg, MSG_T_SIZE, 1) < 0) {
+		return -1;
+	}
 #else
 	if (msgsnd(serv_queue, msg, MSG_T_SIZE, 0) < 0) {
 		return -1;
@@ -77,7 +119,7 @@ static int respond_server(struct msg_t *msg) {
 	return 0;
 }
 
-static int queue_receive(void *buf) {
+static int receive_from_server(void *buf) {
 #ifdef POSIXQ
 	if (mq_receive(queue, buf, MSG_T_SIZE, NULL) < 0) {
 		return -1;
@@ -96,16 +138,25 @@ static int queue_receive(void *buf) {
 static void handshake(void) {
 	struct msg_t hs;
 	hs.from = getpid();
-	hs.queue_key = queue_key;
 	hs.type = HANDSHAKE;
 	
-	if (respond_server(&hs) < 0) {
+#ifdef POSIXQ
+	strcpy(hs.buf, queue_name);
+#else
+	hs.queue_key = queue_key;
+#endif
+	
+	if (send_to_server(&hs) < 0) {
 		perror("Cannot shake hands");
 		exit(EXIT_FAILURE);
 	}
 	
 	struct msg_t msg;
-	queue_receive(&msg);
+	if (receive_from_server(&msg) < 0) {
+		perror("Cannot receive handshake");
+		exit(EXIT_FAILURE);
+	}
+	printf("Assigned ID = %ld\n", msg.client_id);
 	client_id = msg.client_id;
 }
 
@@ -141,7 +192,7 @@ int main(int argc, char **argv) {
 	
 	setup_home();
 	
-	prepare_queue();
+	prepare_queues();
 	
 	signal(SIGINT, sig_cleanup);
 	atexit(cleanup);
@@ -177,16 +228,18 @@ int main(int argc, char **argv) {
 			strcpy(msg.buf, text);
 		} else if (strcmp(command, "end") == 0) {
 			msg.type = END;
-			strcpy(msg.buf, text);
+			send_to_server(&msg);
+			nostop = 1;
+			exit(EXIT_SUCCESS);
 		} else {
 			fprintf(stderr, "Unrecognized command: %s\n", command);
 			continue;
 		}
 		
-		respond_server(&msg);
+		send_to_server(&msg);
 		
 		struct msg_t resp;
-		queue_receive(&resp);
+		receive_from_server(&resp);
 		
 		printf("Response from server: %s\n", resp.buf);
 	}

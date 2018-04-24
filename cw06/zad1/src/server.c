@@ -4,31 +4,17 @@
 #include <fcntl.h>
 #include <errno.h>
 
-#ifdef POSIXQ
-#include <mqueue.h>
-#include <fcntl.h>
-#else
-#include <sys/msg.h>
-#endif
-
 #include "config.h"
 
 #define CLIENT_MAX 256
 
-#ifdef POSIXQ
-mqd_t queue;
-#else
-int queue;
-#endif
+q_type queue;
 
 struct client_t {
 	pid_t pid;
 	long id;
-#ifdef POSIXQ
-	mqd_t queue;
-#else
-	int queue;
-#endif
+	int stopped;
+	q_type queue;
 };
 
 struct client_t clients[CLIENT_MAX];
@@ -36,6 +22,9 @@ size_t next_client_id = 1;
 
 static void cleanup(void) {
 #ifdef POSIXQ
+	for (int i = 0; i < CLIENT_MAX; ++i) {
+		mq_close(clients[i].queue);
+	}
 	mq_close(queue);
 	mq_unlink(QUEUE_NAME);
 #else
@@ -52,7 +41,8 @@ static void sig_cleanup(int sig) {
 
 static void prepare_queue(void) {
 #ifdef POSIXQ
-	queue = mq_open(QUEUE_NAME, O_RDONLY);
+	struct mq_attr attr = { 0, 10, MSG_T_SIZE, 0 };
+	queue = mq_open(QUEUE_NAME, O_RDONLY | O_CREAT | O_EXCL, S_IRWXU, &attr);
 	if (queue == (mqd_t) -1) {
 		perror("Cannot create POSIX queue");
 		exit(EXIT_FAILURE);
@@ -72,8 +62,15 @@ static void prepare_queue(void) {
 #endif
 }
 
-static int queue_receive(void *buf, int wait) {
+static int receive_from_client(void *buf, int wait) {
 #ifdef POSIXQ
+	if (!wait) {
+		struct mq_attr attr;
+		mq_getattr(queue, &attr);
+		attr.mq_flags |= O_NONBLOCK;
+		mq_setattr(queue, &attr, NULL);
+	}
+	
 	if (mq_receive(queue, buf, MSG_T_SIZE, NULL) < 0) {
 		return -1;
 	}
@@ -86,26 +83,30 @@ static int queue_receive(void *buf, int wait) {
 	return 0;
 }
 
-static int client_queue(long id, struct msg_t *msg) {
+static int prepare_client_queue(long cid, struct msg_t *msg) {
 #ifdef POSIXQ
-#error
+	mqd_t cqueue = mq_open(msg->buf, O_WRONLY);
+	if (cqueue == (mqd_t) -1) {
+		return -1;
+	}
 #else
 	int cqueue = msgget(msg->queue_key, 0);
 	if (cqueue < 0) {
 		return -1;
 	}
-	
-	clients[id].queue = cqueue;
 #endif
+	clients[cid].queue = cqueue;
 	
 	return 0;
 }
 
-static int respond_client(long id, struct msg_t *msg) {
+static int send_to_client(long cid, struct msg_t *msg) {
 #ifdef POSIXQ
-#error
+	if (mq_send(clients[cid].queue, (char*) msg, MSG_T_SIZE, 1) < 0) {
+		return -1;
+	}
 #else
-	if (msgsnd(clients[id].queue, msg, MSG_T_SIZE, 0) < 0) {
+	if (msgsnd(clients[cid].queue, msg, MSG_T_SIZE, 0) < 0) {
 		return -1;
 	}
 #endif
@@ -134,7 +135,17 @@ void terminate_at_nl(char* buf) {
 
 // ===================================================================
 
+static void print_help(char *program) {
+	printf("Usage:\n");
+	printf("\t%s\n", program);
+}
+
 int main(int argc, char **argv) {
+	if (argc != 1) {
+		print_help(argc == 0 ? "server" : argv[0]);
+		return -1;
+	}
+	
 	setup_home();
 	
 	prepare_queue();
@@ -146,16 +157,19 @@ int main(int argc, char **argv) {
 	while (1) {
 		struct msg_t msg;
 		struct msg_t response;
-		if (queue_receive(&msg, !end) < 0) {
-			if (errno == ENOMSG) exit(EXIT_SUCCESS);
+		if (receive_from_client(&msg, !end) < 0) {
+			if (errno == ENOMSG || errno == EAGAIN) exit(EXIT_SUCCESS);
 			perror("Cannot receive a message");
 			exit(EXIT_FAILURE);
 		}
+		
+		if (msg.type != HANDSHAKE && clients[msg.client_id].stopped) continue;
 		
 		switch (msg.type) {
 		case HANDSHAKE:
 			;
 			struct client_t client;
+			client.stopped = 0;
 			
 			if (next_client_id >= CLIENT_MAX) {
 				fprintf(stderr, "Client tried to connect, but client limit reached\n");
@@ -169,7 +183,7 @@ int main(int argc, char **argv) {
 			printf("His ID will be %ld\n", client.id);
 			
 			clients[client.id] = client;
-			if (client_queue(client.id, &msg) < 0) {
+			if (prepare_client_queue(client.id, &msg) < 0) {
 				perror("Cannot open client's queue");
 				continue;
 			}
@@ -181,6 +195,12 @@ int main(int argc, char **argv) {
 			response.client_id = client.id;
 			break;
 			
+		case STOP:
+			printf("Received STOP from pid %d\n", msg.from);
+			clients[msg.client_id].stopped = 1;
+			
+			continue;
+			
 		case MIRROR:
 			printf("Received MIRROR from pid %d\n", msg.from);
 			
@@ -188,7 +208,8 @@ int main(int argc, char **argv) {
 			
 			// --------------
 			
-			response.type = client.id;
+			response.type = msg.client_id;
+			response.client_id = msg.client_id;
 			response.from = getpid();
 			mirror_text(text, response.buf);
 			break;
@@ -203,7 +224,8 @@ int main(int argc, char **argv) {
 			
 			// --------------
 			
-			response.type = client.id;
+			response.type = msg.client_id;
+			response.client_id = msg.client_id;
 			response.from = getpid();
 			response.buf[0] = 0;
 			fgets(response.buf, MSG_BUF_SIZE, calc);
@@ -219,7 +241,8 @@ int main(int argc, char **argv) {
 			
 			// --------------
 			
-			response.type = client.id;
+			response.type = msg.client_id;
+			response.client_id = msg.client_id;
 			response.from = getpid();
 			response.buf[0] = 0;
 			fgets(response.buf, MSG_BUF_SIZE, date);
@@ -236,7 +259,7 @@ int main(int argc, char **argv) {
 			continue;
 		}
 		
-		if (respond_client(response.type, &response) < 0) {
+		if (send_to_client(response.client_id, &response) < 0) {
 			perror("Cannot respond to the client");
 		}
 	}

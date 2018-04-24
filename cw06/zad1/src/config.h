@@ -11,15 +11,35 @@
 
 #include <sys/types.h>
 #include <sys/ipc.h>
+
+#include <mqueue.h>
+#include <fcntl.h>
 #include <sys/msg.h>
 
-#define QUEUE_NAME "/oslab-server"
+#ifdef POSIXQ
+typedef mqd_t q_type;
+#else
+typedef int q_type;
+#endif
+
+
+#define QUEUE_PREFIX "/oslab-"
+#define QUEUE_NAME (QUEUE_PREFIX "server")
 
 enum message_t {
-	HANDSHAKE = 1, MIRROR = 2, CALC = 3, TIME = 4, END = 5
+	HANDSHAKE = 1, //
+	MIRROR = 2, //
+	CALC = 3, //
+	TIME = 4, //
+	END = 5, //
+	STOP = 6
 };
 
+#ifdef POSIXQ
+#define MSG_T_SIZE (sizeof(struct msg_t))
+#else
 #define MSG_T_SIZE (sizeof(struct msg_t) - sizeof(long))
+#endif
 #define MSG_BUF_SIZE 256
 
 struct msg_t {

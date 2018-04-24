@@ -1,7 +1,6 @@
 CC=gcc
 CFLAGS=-std=c99 -Wall -ggdb -D_POSIX_C_SOURCE=3
-# -DPOSIXQ
-LIBS=-lrt
+LIBS=
 
 TARGET1=client
 TARGET2=server
@@ -26,7 +25,7 @@ $(BIN)/%.o: $(SRC)/%.c | dirs
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 $(OUT)/$(TARGET1): $(OBJS1_PREF)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 $(OUT)/$(TARGET2): $(OBJS2_PREF)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
