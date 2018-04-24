@@ -18,7 +18,6 @@ struct client_t {
 };
 
 struct client_t clients[CLIENT_MAX];
-size_t next_client_id = 1;
 
 static void cleanup(void) {
 #ifdef POSIXQ
@@ -53,7 +52,7 @@ static void prepare_queue(void) {
 		perror("Cannot generate key");
 		exit(EXIT_FAILURE);
 	}
-	
+
 	queue = msgget(k, IPC_CREAT | IPC_EXCL | S_IRWXU);
 	if (queue < 0) {
 		perror("Cannot create System V queue");
@@ -146,6 +145,10 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 	
+	for (int i = 0; i < CLIENT_MAX; ++i) {
+		clients[i].stopped = 1;
+	}
+	
 	setup_home();
 	
 	prepare_queue();
@@ -171,13 +174,21 @@ int main(int argc, char **argv) {
 			struct client_t client;
 			client.stopped = 0;
 			
-			if (next_client_id >= CLIENT_MAX) {
+			long cid = -1;
+			for (int i = 0; i < CLIENT_MAX; ++i) {
+				if (!clients[i].stopped) {
+					cid = i;
+					break;
+				}
+			}
+			
+			if (cid == -1) {
 				fprintf(stderr, "Client tried to connect, but client limit reached\n");
 				continue;
 			}
 			
 			client.pid = msg.from;
-			client.id = next_client_id++;
+			client.id = cid;
 			
 			printf("Received HANDSHAKE from pid %d\n", client.pid);
 			printf("His ID will be %ld\n", client.id);
@@ -197,7 +208,11 @@ int main(int argc, char **argv) {
 			
 		case STOP:
 			printf("Received STOP from pid %d\n", msg.from);
+			
 			clients[msg.client_id].stopped = 1;
+#ifdef POSIXQ
+			mq_close(clients[msg.client_id].queue);
+#endif
 			
 			continue;
 			
