@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-std=c99 -Wall -ggdb
+CFLAGS=-std=c99 -Wall -ggdb -D_POSIX_C_SOURCE=3
 # -DPOSIXQ
 LIBS=-lrt
 

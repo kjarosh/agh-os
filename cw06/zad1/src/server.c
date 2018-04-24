@@ -2,6 +2,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #ifdef POSIXQ
 #include <mqueue.h>
@@ -31,7 +32,7 @@ struct client_t {
 };
 
 struct client_t clients[CLIENT_MAX];
-size_t next_client_id = 0;
+size_t next_client_id = 1;
 
 static void cleanup(void) {
 #ifdef POSIXQ
@@ -71,13 +72,13 @@ static void prepare_queue(void) {
 #endif
 }
 
-static int queue_receive(void *buf) {
+static int queue_receive(void *buf, int wait) {
 #ifdef POSIXQ
 	if (mq_receive(queue, buf, MSG_T_SIZE, NULL) < 0) {
 		return -1;
 	}
 #else
-	if (msgrcv(queue, buf, MSG_T_SIZE, 0, MSG_NOERROR) < 0) {
+	if (msgrcv(queue, buf, MSG_T_SIZE, 0, MSG_NOERROR | (wait ? 0 : IPC_NOWAIT)) < 0) {
 		return -1;
 	}
 #endif
@@ -100,7 +101,7 @@ static int client_queue(long id, struct msg_t *msg) {
 	return 0;
 }
 
-static int respond(long id, struct msg_t *msg) {
+static int respond_client(long id, struct msg_t *msg) {
 #ifdef POSIXQ
 #error
 #else
@@ -121,6 +122,14 @@ static void mirror_text(char *from, char *to) {
 	while (len > 0) {
 		to[dest++] = from[--len];
 	}
+	to[dest] = 0;
+}
+
+void terminate_at_nl(char* buf) {
+	char *c = &buf[0];
+	while (*c != '\n' && *c != 0)
+		++c;
+	*c = 0;
 }
 
 // ===================================================================
@@ -133,13 +142,14 @@ int main(int argc, char **argv) {
 	signal(SIGINT, sig_cleanup);
 	atexit(cleanup);
 	
+	int end = 0;
 	while (1) {
 		struct msg_t msg;
 		struct msg_t response;
-		if (queue_receive(&msg) < 0) {
+		if (queue_receive(&msg, !end) < 0) {
+			if (errno == ENOMSG) exit(EXIT_SUCCESS);
 			perror("Cannot receive a message");
-			sleep(1);
-			continue;
+			exit(EXIT_FAILURE);
 		}
 		
 		switch (msg.type) {
@@ -182,8 +192,52 @@ int main(int argc, char **argv) {
 			response.from = getpid();
 			mirror_text(text, response.buf);
 			break;
+			
+		case CALC:
+			printf("Received CALC from pid %d\n", msg.from);
+			
+			char *cmd = malloc(sizeof(char) * (strlen(msg.buf) + 18));
+			sprintf(cmd, "echo '%s' | bc 2>&1", msg.buf);
+			FILE *calc = popen(cmd, "r");
+			free(cmd);
+			
+			// --------------
+			
+			response.type = client.id;
+			response.from = getpid();
+			response.buf[0] = 0;
+			fgets(response.buf, MSG_BUF_SIZE, calc);
+			
+			terminate_at_nl(response.buf);
+			pclose(calc);
+			break;
+			
+		case TIME:
+			printf("Received TIME from pid %d\n", msg.from);
+			
+			FILE *date = popen("date", "r");
+			
+			// --------------
+			
+			response.type = client.id;
+			response.from = getpid();
+			response.buf[0] = 0;
+			fgets(response.buf, MSG_BUF_SIZE, date);
+			
+			terminate_at_nl(response.buf);
+			
+			pclose(date);
+			break;
+			
+		case END:
+			printf("Received END from pid %d\n", msg.from);
+			
+			end = 1;
+			continue;
 		}
 		
-		respond(msg.client_id, &response);
+		if (respond_client(response.type, &response) < 0) {
+			perror("Cannot respond to the client");
+		}
 	}
 }
