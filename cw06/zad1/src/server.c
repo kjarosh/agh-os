@@ -40,7 +40,7 @@ static void sig_cleanup(int sig) {
 
 static void prepare_queue(void) {
 #ifdef POSIXQ
-	struct mq_attr attr = { 0, 10, MSG_T_SIZE, 0 };
+	struct mq_attr attr = {0, 10, MSG_SIZE, 0};
 	queue = mq_open(QUEUE_NAME, O_RDONLY | O_CREAT | O_EXCL, S_IRWXU, &attr);
 	if (queue == (mqd_t) -1) {
 		perror("Cannot create POSIX queue");
@@ -52,7 +52,7 @@ static void prepare_queue(void) {
 		perror("Cannot generate key");
 		exit(EXIT_FAILURE);
 	}
-
+	
 	queue = msgget(k, IPC_CREAT | IPC_EXCL | S_IRWXU);
 	if (queue < 0) {
 		perror("Cannot create System V queue");
@@ -69,12 +69,13 @@ static int receive_from_client(void *buf, int wait) {
 		attr.mq_flags |= O_NONBLOCK;
 		mq_setattr(queue, &attr, NULL);
 	}
-	
-	if (mq_receive(queue, buf, MSG_T_SIZE, NULL) < 0) {
+
+	if (mq_receive(queue, buf, MSG_SIZE, NULL) < 0) {
 		return -1;
 	}
 #else
-	if (msgrcv(queue, buf, MSG_T_SIZE, 0, MSG_NOERROR | (wait ? 0 : IPC_NOWAIT)) < 0) {
+	int flags = MSG_NOERROR | (wait ? 0 : IPC_NOWAIT);
+	if (msgrcv(queue, buf, MSG_SIZE, 0, flags) < 0) {
 		return -1;
 	}
 #endif
@@ -101,11 +102,11 @@ static int prepare_client_queue(long cid, struct msg_t *msg) {
 
 static int send_to_client(long cid, struct msg_t *msg) {
 #ifdef POSIXQ
-	if (mq_send(clients[cid].queue, (char*) msg, MSG_T_SIZE, 1) < 0) {
+	if (mq_send(clients[cid].queue, (char*) msg, MSG_SIZE, 1) < 0) {
 		return -1;
 	}
 #else
-	if (msgsnd(clients[cid].queue, msg, MSG_T_SIZE, 0) < 0) {
+	if (msgsnd(clients[cid].queue, msg, MSG_SIZE, 0) < 0) {
 		return -1;
 	}
 #endif
@@ -123,13 +124,6 @@ static void mirror_text(char *from, char *to) {
 		to[dest++] = from[--len];
 	}
 	to[dest] = 0;
-}
-
-void terminate_at_nl(char* buf) {
-	char *c = &buf[0];
-	while (*c != '\n' && *c != 0)
-		++c;
-	*c = 0;
 }
 
 // ===================================================================
@@ -150,7 +144,6 @@ int main(int argc, char **argv) {
 	}
 	
 	setup_home();
-	
 	prepare_queue();
 	
 	signal(SIGINT, sig_cleanup);
@@ -176,7 +169,7 @@ int main(int argc, char **argv) {
 			
 			long cid = -1;
 			for (int i = 0; i < CLIENT_MAX; ++i) {
-				if (!clients[i].stopped) {
+				if (clients[i].stopped) {
 					cid = i;
 					break;
 				}

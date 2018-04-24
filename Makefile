@@ -10,7 +10,7 @@ all-. clean-.:
 	true
 
 all-./%:
-	$(MAKE) -C "$(@:all-%=%)" all
+	$(MAKE) -s -C "$(@:all-%=%)" all
 
 clean-./%:
-	$(MAKE) -C "$(@:clean-%=%)" all
+	$(MAKE) -s -C "$(@:clean-%=%)" all

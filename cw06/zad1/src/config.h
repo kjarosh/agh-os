@@ -9,19 +9,18 @@
 #include <sys/types.h>
 #include <pwd.h>
 
-#include <sys/types.h>
-#include <sys/ipc.h>
-
 #include <mqueue.h>
 #include <fcntl.h>
 #include <sys/msg.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <sys/ipc.h>
 
 #ifdef POSIXQ
 typedef mqd_t q_type;
 #else
 typedef int q_type;
 #endif
-
 
 #define QUEUE_PREFIX "/oslab-"
 #define QUEUE_NAME (QUEUE_PREFIX "server")
@@ -36,10 +35,11 @@ enum message_t {
 };
 
 #ifdef POSIXQ
-#define MSG_T_SIZE (sizeof(struct msg_t))
+#define MSG_SIZE (sizeof (struct msg_t))
 #else
-#define MSG_T_SIZE (sizeof(struct msg_t) - sizeof(long))
+#define MSG_SIZE (sizeof (struct msg_t) - sizeof (long))
 #endif
+
 #define MSG_BUF_SIZE 256
 
 struct msg_t {
@@ -57,10 +57,16 @@ struct msg_t {
 
 char *home_dir;
 
-static void setup_home(void) {
+static inline void setup_home(void) {
 	if ((home_dir = getenv("HOME")) == NULL) {
 		home_dir = getpwuid(getuid())->pw_dir;
 	}
+}
+
+static inline void terminate_at_nl(char *c) {
+	while (*c != '\n' && *c != 0)
+		++c;
+	*c = 0;
 }
 
 #endif

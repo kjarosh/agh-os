@@ -65,7 +65,7 @@ static void prepare_queues(void) {
 	queue_name = malloc(sizeof(char) * 255);
 	sprintf(queue_name, QUEUE_PREFIX "%d", rand() ^ getpid());
 	
-	struct mq_attr attr = { 0, 10, MSG_T_SIZE, 0 };
+	struct mq_attr attr = {0, 10, MSG_SIZE, 0};
 	queue = mq_open(queue_name, O_RDONLY | O_CREAT | O_EXCL, S_IRWXU, &attr);
 	if (queue == -1) {
 		perror("Cannot create POSIX queue");
@@ -107,11 +107,11 @@ static void prepare_queues(void) {
 
 static int send_to_server(struct msg_t *msg) {
 #ifdef POSIXQ
-	if (mq_send(serv_queue, (char*) msg, MSG_T_SIZE, 1) < 0) {
+	if (mq_send(serv_queue, (char*) msg, MSG_SIZE, 1) < 0) {
 		return -1;
 	}
 #else
-	if (msgsnd(serv_queue, msg, MSG_T_SIZE, 0) < 0) {
+	if (msgsnd(serv_queue, msg, MSG_SIZE, 0) < 0) {
 		return -1;
 	}
 #endif
@@ -121,11 +121,11 @@ static int send_to_server(struct msg_t *msg) {
 
 static int receive_from_server(void *buf) {
 #ifdef POSIXQ
-	if (mq_receive(queue, buf, MSG_T_SIZE, NULL) < 0) {
+	if (mq_receive(queue, buf, MSG_SIZE, NULL) < 0) {
 		return -1;
 	}
 #else
-	if (msgrcv(queue, buf, MSG_T_SIZE, 0, MSG_NOERROR) < 0) {
+	if (msgrcv(queue, buf, MSG_SIZE, 0, MSG_NOERROR) < 0) {
 		return -1;
 	}
 #endif
@@ -213,37 +213,38 @@ int main(int argc, char **argv) {
 		msg.client_id = client_id;
 		msg.from = getpid();
 		
+		// iterate until a space or null-term encountered
+		//   then insert null-term
 		while (*text != ' ' && *text != 0)
 			++text;
 		if (*text != 0) *(text++) = 0;
 		
-		size_t textlen = strlen(text);
-		if (text[textlen - 1] == '\n') text[textlen - 1] = 0;
+		terminate_at_nl(text);
 		
 		if (strcmp(command, "mirror") == 0) {
 			msg.type = MIRROR;
-			strcpy(msg.buf, text);
 		} else if (strcmp(command, "calc") == 0) {
 			msg.type = CALC;
-			strcpy(msg.buf, text);
 		} else if (strcmp(command, "time") == 0) {
 			msg.type = TIME;
-			strcpy(msg.buf, text);
 		} else if (strcmp(command, "end") == 0) {
 			msg.type = END;
 			send_to_server(&msg);
 			nostop = 1;
 			exit(EXIT_SUCCESS);
+			// not reachable
 		} else {
 			fprintf(stderr, "Unrecognized command: %s\n", command);
 			continue;
+			// not reachable
 		}
 		
+		strcpy(msg.buf, text);
 		send_to_server(&msg);
 		
 		struct msg_t resp;
 		receive_from_server(&resp);
 		
-		printf("Response from server: %s\n", resp.buf);
+		printf("Response from the server: %s\n", resp.buf);
 	}
 }
