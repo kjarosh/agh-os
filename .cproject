@@ -361,7 +361,7 @@
                 			
             </target>
             			
-            <target name="all" path="cw07" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
+            <target name="all" path="cw07/zad1" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
                 				
                 <buildCommand>make</buildCommand>
                 				
@@ -377,7 +377,7 @@
                 			
             </target>
             			
-            <target name="clean" path="cw07" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
+            <target name="clean" path="cw07/zad1" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
                 				
                 <buildCommand>make</buildCommand>
                 				
