@@ -30,7 +30,7 @@ struct barber_shop_mem {
 
 extern struct barber_shop_mem *bs;
 
-int wr_pop(struct wr_seat *to_pop);
+int wr_pop(struct wr_seat **to_pop);
 struct wr_seat *wr_push();
 int wr_get_count();
 
@@ -41,3 +41,7 @@ void initialize_barber();
 void initialize_client();
 void dispose_barber();
 void dispose_client();
+
+void log_barber(const char *message);
+void log_barber2(const char *message, int i);
+void log_client(const char *message);

@@ -15,13 +15,13 @@ int wr_get_count() {
 	return bs->wr_count;
 }
 
-int wr_pop(struct wr_seat *to_pop) {
+int wr_pop(struct wr_seat **to_pop) {
 	if (bs->wr_count <= 0) return 1;
 	
 	struct wr_seat *ret = &bs->waiting_room[bs->wr_start];
 	bs->wr_start = (bs->wr_start + 1) % bs->wr_capacity;
 	--bs->wr_count;
-	*to_pop = *ret;
+	*to_pop = ret;
 	return 0;
 }
 
@@ -73,7 +73,7 @@ void initialize_barber(int wr_cap) {
 	}
 	
 	map_shm(get_bs_size(wr_cap));
-
+	
 	bs->wr_capacity = wr_cap;
 	bs->wr_count = 0;
 	bs->wr_start = 0;
@@ -119,4 +119,16 @@ void dispose_barber() {
 
 void dispose_client() {
 	unmap_shm();
+}
+
+void log_barber(const char *message) {
+	printf("[BARBER] %s\n", message);
+}
+
+void log_barber2(const char *message, int i) {
+	printf("[BARBER] %s %d\n", message, i);
+}
+
+void log_client(const char *message) {
+	printf("[CLIENT %d] %s\n", (int) getpid(), message);
 }
