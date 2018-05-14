@@ -29,10 +29,10 @@ static void cleanup() {
 
 static void print_help(char *program) {
 	printf("Usage:\n");
-	printf("\t%s <clients>\n", program);
+	printf("\t%s <clients> <haircuts>\n", program);
 }
 
-static void spawn_clients(int count) {
+static void spawn_clients(int count, int haircuts) {
 	clients = malloc(count * sizeof(pid_t));
 	clients_count = count;
 	
@@ -43,8 +43,11 @@ static void spawn_clients(int count) {
 			// barber
 			clients[i] = forked;
 		} else {
+			char num[128];
+			sprintf(num, "%d", haircuts);
+			
 			// client
-			execl("./client", "client", (char*) NULL);
+			execl("./client", "client", num, (char*) NULL);
 			perror("Cannot exec");
 			_exit(-1);
 		}
@@ -56,16 +59,17 @@ int main(int argc, char **argv) {
 	signal(SIGINT, sig_handler);
 	signal(SIGTERM, sig_handler);
 	
-	if (argc != 2) {
+	if (argc != 3) {
 		print_help(argv[0]);
 		exit(1);
 	}
 	
 	int wr_cap = atoi(argv[1]);
+	int haircuts = atoi(argv[2]);
 	
 	initialize_barber(wr_cap);
 	
-	spawn_clients(wr_cap);
+	spawn_clients(wr_cap, haircuts);
 	
 	while (running) {
 		if (sem_wait(&bs->mx_waiting_room) != 0) {
@@ -101,16 +105,21 @@ int main(int argc, char **argv) {
 			
 			// the barber is being woken up, so the chair is already taken
 			log_barber("Waking up");
+			bs_sleep(1);
 		}
+		
+		sem_wait(&bs->sem_customer_ready);
 		
 		log_barber2("Starting haircut for", bs->barber_chair.pid);
 		
 		// a customer is in the chair, so barber 'em!
-		sleep(1);
 		
 		log_barber2("Haircut ready for", bs->barber_chair.pid);
 		
 		// tell them, we're ready
 		sem_post(&bs->sem_barber_ready);
+		
+		// wait for them to get out
+		sem_wait(&bs->sem_customer_ready);
 	}
 }

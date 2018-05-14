@@ -17,6 +17,7 @@ struct barber_shop_mem {
 	sem_t mx_waiting_room;
 	sem_t sem_barber_sleeping;
 	sem_t sem_barber_ready;
+	sem_t sem_customer_ready;
 
 	bool barber_sleeping;
 
@@ -45,3 +46,5 @@ void dispose_client();
 void log_barber(const char *message);
 void log_barber2(const char *message, int i);
 void log_client(const char *message);
+
+void bs_sleep(int seconds);

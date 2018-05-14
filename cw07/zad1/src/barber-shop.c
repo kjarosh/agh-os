@@ -83,6 +83,7 @@ void initialize_barber(int wr_cap) {
 	sem_init(&bs->mx_waiting_room, true, 1);
 	sem_init(&bs->sem_barber_sleeping, true, 0);
 	sem_init(&bs->sem_barber_ready, true, 0);
+	sem_init(&bs->sem_customer_ready, true, 0);
 	
 	for (int i = 0; i < wr_cap; ++i) {
 		bs->waiting_room[i] = empty_seat();
@@ -123,12 +124,21 @@ void dispose_client() {
 
 void log_barber(const char *message) {
 	printf("[BARBER] %s\n", message);
+	bs_sleep(1);
 }
 
 void log_barber2(const char *message, int i) {
 	printf("[BARBER] %s %d\n", message, i);
+	bs_sleep(1);
 }
 
 void log_client(const char *message) {
 	printf("[CLIENT %d] %s\n", (int) getpid(), message);
+	bs_sleep(1);
+}
+
+void bs_sleep(int seconds) {
+#ifdef BS_SLEEP
+	sleep(seconds);
+#endif
 }
