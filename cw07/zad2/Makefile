@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-std=c99 -Wall -ggdb -D_XOPEN_SOURCE=512
+CFLAGS=-std=c99 -Wall -ggdb -D_XOPEN_SOURCE=512 -DSYS_V
 LIBS=-pthread -lrt
 
 TARGET1=barber
