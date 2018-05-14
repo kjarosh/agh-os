@@ -8,6 +8,9 @@
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/sem.h>
+#include <sys/shm.h>
+#include <pwd.h>
+#include <errno.h>
 
 // SHARED
 struct barber_shop_mem *bs;
@@ -62,34 +65,62 @@ struct wr_seat empty_seat() {
 	return ret;
 }
 
+#ifndef SYS_V
 static void map_shm(size_t size) {
 	if ((bs = mmap(NULL, //
-			size, //
-			PROT_READ | PROT_WRITE, //
-			MAP_SHARED, //
-			shared_memory, 0)) == (void*) -1) {
+							size,//
+							PROT_READ | PROT_WRITE,//
+							MAP_SHARED,//
+							shared_memory, 0)) == (void*) -1) {
 		perror("Cannot mmap");
 		exit(1);
 	}
 }
+
+static void unmap_shm(void) {
+	if (bs != NULL && bs != (void*) -1) {
+		munmap(bs, sizeof(struct barber_shop_mem));
+	}
+}
+#endif
 
 size_t get_bs_size(int wr_cap) {
 	return sizeof(struct barber_shop_mem) + wr_cap * sizeof(struct wr_seat);
 }
 
 void initialize_barber(int wr_cap) {
+	size_t bs_size = get_bs_size(wr_cap);
+	
+#ifdef SYS_V
+	char *home = getpwuid(getuid())->pw_dir;
+	key_t key = ftok(home, 'B');
+	if (key == -1) {
+		perror("Cannot create key");
+		exit(1);
+	}
+	
+	shared_memory = shmget(key, bs_size, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+	if (shared_memory == -1) {
+		printf("%d\n", errno);
+		perror("Cannot create shared memory");
+		exit(1);
+	}
+	
+	bs = shmat(shared_memory, NULL, 0);
+#else
 	shared_memory = shm_open(SHM_NAME, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
 	if (shared_memory == -1) {
 		perror("Cannot create shared memory");
 		exit(1);
 	}
-	
-	if (ftruncate(shared_memory, get_bs_size(wr_cap)) < 0) {
+
+	if (ftruncate(shared_memory, bs_size) < 0) {
 		perror("Cannot truncate shared memory");
 		exit(1);
 	}
-	
-	map_shm(get_bs_size(wr_cap));
+
+	map_shm(bs_size);
+#endif
 	
 	bs->wr_capacity = wr_cap;
 	bs->wr_count = 0;
@@ -123,35 +154,49 @@ void initialize_barber(int wr_cap) {
 }
 
 void initialize_client(void) {
-	shared_memory = shm_open(SHM_NAME, O_RDWR, 0);
+#ifdef SYS_V
+	shared_memory = shmget(ftok(getpwuid(getuid())->pw_dir, 'B'), 0, 0);
 	if (shared_memory == -1) {
 		perror("Cannot open shared memory");
 		exit(1);
 	}
 	
+	bs = shmat(shared_memory, NULL, 0);
+#else
+	shared_memory = shm_open(SHM_NAME, O_RDWR, 0);
+	if (shared_memory == -1) {
+		perror("Cannot open shared memory");
+		exit(1);
+	}
+
 	struct stat statbuf;
 	if (fstat(shared_memory, &statbuf) != 0) {
 		perror("Cannot fstat shared memory");
 		exit(1);
 	}
-	
-	map_shm(statbuf.st_size);
-}
 
-static void unmap_shm(void) {
-	if (bs != NULL && bs != (void*) -1) {
-		munmap(bs, sizeof(struct barber_shop_mem));
-	}
+	map_shm(statbuf.st_size);
+#endif
 }
 
 void dispose_barber(void) {
-	unmap_shm();
+#ifdef SYS_V
+	shmdt(bs);
 	
+	shmctl(shared_memory, IPC_RMID, NULL);
+#else
+	unmap_shm();
+
 	shm_unlink(SHM_NAME);
+#endif
 }
 
 void dispose_client(void) {
+#ifdef SYS_V
+	shmdt(bs);
+#else
 	unmap_shm();
+#endif
 }
 
 void log_barber(const char *message) {
