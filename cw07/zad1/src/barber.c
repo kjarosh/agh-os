@@ -72,7 +72,7 @@ int main(int argc, char **argv) {
 	spawn_clients(wr_cap, haircuts);
 	
 	while (running) {
-		if (sem_wait(&bs->mx_waiting_room) != 0) {
+		if (semaphore_wait(conv_tp(bs->mx_waiting_room)) != 0) {
 			perror("Cannot access the waiting room");
 			exit(1);
 		}
@@ -85,18 +85,19 @@ int main(int argc, char **argv) {
 			
 			// invite them to the chair
 			log_barber2("Inviting client", next->pid);
-			sem_post(&next->waiting);
+			semaphore_post(conv_tp(next->waiting));
 			
-			sem_post(&bs->mx_waiting_room);
+			semaphore_post(conv_tp(bs->mx_waiting_room));
 		} else {
 			// no customers in the waiting room
 			
 			// go to sleep
 			bs->barber_sleeping = true;
-			sem_post(&bs->mx_waiting_room);
+			semaphore_post(conv_tp(bs->mx_waiting_room));
 			
 			log_barber("Going to sleep");
-			if (sem_wait(&bs->sem_barber_sleeping) != 0) {
+			if (semaphore_wait(conv_tp(bs->sem_barber_sleeping)) != 0) {
+				// if it's the interrupt
 				if (errno == EINTR) exit(0);
 				
 				perror("Cannot go to sleep");
@@ -108,7 +109,7 @@ int main(int argc, char **argv) {
 			bs_sleep(1);
 		}
 		
-		sem_wait(&bs->sem_customer_ready);
+		semaphore_wait2(conv_tp(bs->sem_customer_ready));
 		
 		log_barber2("Starting haircut for", bs->barber_chair.pid);
 		
@@ -117,9 +118,9 @@ int main(int argc, char **argv) {
 		log_barber2("Haircut ready for", bs->barber_chair.pid);
 		
 		// tell them, we're ready
-		sem_post(&bs->sem_barber_ready);
+		semaphore_post(conv_tp(bs->sem_barber_ready));
 		
 		// wait for them to get out
-		sem_wait(&bs->sem_customer_ready);
+		semaphore_wait2(conv_tp(bs->sem_customer_ready));
 	}
 }

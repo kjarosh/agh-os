@@ -5,13 +5,16 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
 
 // SHARED
 struct barber_shop_mem *bs;
 
 static int shared_memory;
 
-int wr_get_count() {
+int wr_get_count(void) {
 	return bs->wr_count;
 }
 
@@ -25,7 +28,7 @@ int wr_pop(struct wr_seat **to_pop) {
 	return 0;
 }
 
-struct wr_seat *wr_push() {
+struct wr_seat *wr_push(void) {
 	if (bs->wr_count >= bs->wr_capacity) return NULL;
 	
 	struct wr_seat *ret = &bs->waiting_room[bs->wr_end];
@@ -34,10 +37,24 @@ struct wr_seat *wr_push() {
 	return ret;
 }
 
-struct wr_seat new_seat() {
+struct wr_seat new_seat(void) {
 	struct wr_seat ret = { true, getpid() };
-	sem_init(&ret.waiting, true, 0);
+	
+#ifdef SYS_V
+	ret.waiting = semget(IPC_PRIVATE, 1, S_IRUSR | S_IWUSR);
+	semctl(ret.waiting, 0, SETVAL, (union semun) 0);
+#else
+	sem_init(conv_tp(ret.waiting), true, 0);
+#endif
+	
 	return ret;
+}
+
+void delete_seat(struct wr_seat *seat) {
+#ifdef SYS_V
+	union semun dummy;
+	semctl(seat->waiting, 0, IPC_RMID, dummy);
+#endif
 }
 
 struct wr_seat empty_seat() {
@@ -80,17 +97,32 @@ void initialize_barber(int wr_cap) {
 	bs->wr_end = 0;
 	bs->barber_chair = empty_seat();
 	bs->barber_sleeping = false;
-	sem_init(&bs->mx_waiting_room, true, 1);
-	sem_init(&bs->sem_barber_sleeping, true, 0);
-	sem_init(&bs->sem_barber_ready, true, 0);
-	sem_init(&bs->sem_customer_ready, true, 0);
+	
+#ifdef SYS_V
+	bs->mx_waiting_room = semget(IPC_PRIVATE, 1, S_IRUSR | S_IWUSR);
+	semctl(bs->mx_waiting_room, 0, SETVAL, (union semun) 1);
+	
+	bs->sem_barber_sleeping = semget(IPC_PRIVATE, 1, S_IRUSR | S_IWUSR);
+	semctl(bs->sem_barber_sleeping, 0, SETVAL, (union semun) 0);
+	
+	bs->sem_barber_ready = semget(IPC_PRIVATE, 1, S_IRUSR | S_IWUSR);
+	semctl(bs->sem_barber_ready, 0, SETVAL, (union semun) 0);
+	
+	bs->sem_customer_ready = semget(IPC_PRIVATE, 1, S_IRUSR | S_IWUSR);
+	semctl(bs->sem_customer_ready, 0, SETVAL, (union semun) 0);
+#else
+	sem_init(conv_tp(bs->mx_waiting_room), true, 1);
+	sem_init(conv_tp(bs->sem_barber_sleeping), true, 0);
+	sem_init(conv_tp(bs->sem_barber_ready), true, 0);
+	sem_init(conv_tp(bs->sem_customer_ready), true, 0);
+#endif
 	
 	for (int i = 0; i < wr_cap; ++i) {
 		bs->waiting_room[i] = empty_seat();
 	}
 }
 
-void initialize_client() {
+void initialize_client(void) {
 	shared_memory = shm_open(SHM_NAME, O_RDWR, 0);
 	if (shared_memory == -1) {
 		perror("Cannot open shared memory");
@@ -106,19 +138,19 @@ void initialize_client() {
 	map_shm(statbuf.st_size);
 }
 
-static void unmap_shm() {
+static void unmap_shm(void) {
 	if (bs != NULL && bs != (void*) -1) {
 		munmap(bs, sizeof(struct barber_shop_mem));
 	}
 }
 
-void dispose_barber() {
+void dispose_barber(void) {
 	unmap_shm();
 	
 	shm_unlink(SHM_NAME);
 }
 
-void dispose_client() {
+void dispose_client(void) {
 	unmap_shm();
 }
 
@@ -140,5 +172,42 @@ void log_client(const char *message) {
 void bs_sleep(int seconds) {
 #ifdef BS_SLEEP
 	sleep(seconds);
+#endif
+}
+
+int semaphore_wait(semaphore_p sem) {
+#ifdef SYS_V
+	struct sembuf buf;
+	buf.sem_num = 0;
+	buf.sem_op = -1;
+	buf.sem_flg = 0;
+	return semop(sem, &buf, 1);
+#else
+	return sem_wait(sem);
+#endif
+}
+
+void semaphore_wait2(semaphore_p sem) {
+	if (semaphore_wait(sem) != 0) {
+		perror("Cannot wait");
+		exit(1);
+	}
+}
+
+void semaphore_post(semaphore_p sem) {
+#ifdef SYS_V
+	struct sembuf buf;
+	buf.sem_num = 0;
+	buf.sem_op = 1;
+	buf.sem_flg = 0;
+	if (semop(sem, &buf, 1) != 0) {
+		perror("Cannot post");
+		exit(1);
+	}
+#else
+	if (sem_post(sem) != 0) {
+		perror("Cannot post");
+		exit(1);
+	}
 #endif
 }

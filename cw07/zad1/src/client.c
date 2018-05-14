@@ -41,7 +41,7 @@ int main(int argc, char **argv) {
 	while (running && haircuts > 0) {
 		--haircuts;
 		
-		if (sem_wait(&bs->mx_waiting_room) != 0) {
+		if (semaphore_wait(conv_tp(bs->mx_waiting_room)) != 0) {
 			perror("Cannot access the waiting room");
 			exit(1);
 		}
@@ -52,39 +52,41 @@ int main(int argc, char **argv) {
 			
 			log_client("Waking up the barber");
 			bs->barber_sleeping = false;
-			sem_post(&bs->sem_barber_sleeping);
-			sem_post(&bs->mx_waiting_room);
+			semaphore_post(conv_tp(bs->sem_barber_sleeping));
+			semaphore_post(conv_tp(bs->mx_waiting_room));
 			
 			log_client("Sitting in the chair");
 			bs->barber_chair = new_seat();
 			
-			sem_post(&bs->sem_customer_ready);
+			semaphore_post(conv_tp(bs->sem_customer_ready));
 		} else {
 			struct wr_seat *my_seat = wr_push();
 			
 			if (my_seat == NULL) {
 				// no free seats
-				sem_post(&bs->mx_waiting_room);
+				semaphore_post(conv_tp(bs->mx_waiting_room));
 				log_client("No free seats");
 				exit(-1);
 			}
 			
 			log_client("Going to the waiting room");
 			*my_seat = new_seat();
-			sem_post(&bs->mx_waiting_room);
+			semaphore_post(conv_tp(bs->mx_waiting_room));
 			
 			// wait in the waiting room
-			sem_wait(&my_seat->waiting);
+			semaphore_wait2(conv_tp(my_seat->waiting));
 			
 			// sit in the chair
 			log_client("Sitting in the chair");
 			bs->barber_chair = new_seat();
 			
-			sem_post(&bs->sem_customer_ready);
+			delete_seat(my_seat);
+			
+			semaphore_post(conv_tp(bs->sem_customer_ready));
 		}
 		
 		// wait for the haircut
-		if (sem_wait(&bs->sem_barber_ready) != 0) {
+		if (semaphore_wait(conv_tp(bs->sem_barber_ready)) != 0) {
 			perror("Cannot wait for barber");
 		}
 		
@@ -92,7 +94,7 @@ int main(int argc, char **argv) {
 		
 		bs->barber_chair = empty_seat();
 		
-		sem_post(&bs->sem_customer_ready);
+		semaphore_post(conv_tp(bs->sem_customer_ready));
 		
 		bs_sleep(rand() % 4 + 1);
 	}
