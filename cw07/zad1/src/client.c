@@ -7,10 +7,8 @@
 
 #include "barber-shop.h"
 
-static bool running = true;
-
 static void sig_handler(int sig) {
-	running = false;
+	exit(0);
 }
 
 static void cleanup() {
@@ -25,6 +23,10 @@ static void print_help(char *program) {
 int main(int argc, char **argv) {
 	srand(time(NULL) ^ getpid());
 	
+#ifdef BS_SLEEP
+	usleep(rand() % 1000000);
+#endif
+	
 	atexit(cleanup);
 	signal(SIGINT, sig_handler);
 	signal(SIGTERM, sig_handler);
@@ -38,11 +40,11 @@ int main(int argc, char **argv) {
 	
 	initialize_client();
 	
-	while (running && haircuts > 0) {
+	while (haircuts > 0) {
 		--haircuts;
 		
 		if (semaphore_wait(conv_tp(bs->mx_waiting_room)) != 0) {
-			perror("Cannot access the waiting room");
+			perror("[C] Cannot access the waiting room");
 			exit(1);
 		}
 		
@@ -87,15 +89,16 @@ int main(int argc, char **argv) {
 		
 		// wait for the haircut
 		if (semaphore_wait(conv_tp(bs->sem_barber_ready)) != 0) {
-			perror("Cannot wait for barber");
+			perror("[C] Cannot wait for barber");
 		}
 		
 		log_client("Haircut done. Thanks!");
 		
+		delete_seat(&bs->barber_chair);
 		bs->barber_chair = empty_seat();
 		
 		semaphore_post(conv_tp(bs->sem_customer_ready));
 		
-		bs_sleep(rand() % 4 + 1);
+		bs_sleep(rand() % 6 + 1);
 	}
 }

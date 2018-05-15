@@ -11,9 +11,10 @@
 #include <sys/shm.h>
 #include <pwd.h>
 #include <errno.h>
+#include <time.h>
 
 // SHARED
-struct barber_shop_mem *bs;
+struct barber_shop_mem *bs = (void*) -1;
 
 static int shared_memory;
 
@@ -68,10 +69,10 @@ struct wr_seat empty_seat() {
 #ifndef SYS_V
 static void map_shm(size_t size) {
 	if ((bs = mmap(NULL, //
-							size,//
-							PROT_READ | PROT_WRITE,//
-							MAP_SHARED,//
-							shared_memory, 0)) == (void*) -1) {
+			size, //
+			PROT_READ | PROT_WRITE, //
+			MAP_SHARED, //
+			shared_memory, 0)) == (void*) -1) {
 		perror("Cannot mmap");
 		exit(1);
 	}
@@ -98,14 +99,13 @@ void initialize_barber(int wr_cap) {
 		perror("Cannot create key");
 		exit(1);
 	}
-	
+
 	shared_memory = shmget(key, bs_size, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
 	if (shared_memory == -1) {
-		printf("%d\n", errno);
 		perror("Cannot create shared memory");
 		exit(1);
 	}
-	
+
 	bs = shmat(shared_memory, NULL, 0);
 #else
 	shared_memory = shm_open(SHM_NAME, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
@@ -113,12 +113,12 @@ void initialize_barber(int wr_cap) {
 		perror("Cannot create shared memory");
 		exit(1);
 	}
-
+	
 	if (ftruncate(shared_memory, bs_size) < 0) {
 		perror("Cannot truncate shared memory");
 		exit(1);
 	}
-
+	
 	map_shm(bs_size);
 #endif
 	
@@ -132,13 +132,13 @@ void initialize_barber(int wr_cap) {
 #ifdef SYS_V
 	bs->mx_waiting_room = semget(IPC_PRIVATE, 1, S_IRUSR | S_IWUSR);
 	semctl(bs->mx_waiting_room, 0, SETVAL, (union semun) 1);
-	
+
 	bs->sem_barber_sleeping = semget(IPC_PRIVATE, 1, S_IRUSR | S_IWUSR);
 	semctl(bs->sem_barber_sleeping, 0, SETVAL, (union semun) 0);
-	
+
 	bs->sem_barber_ready = semget(IPC_PRIVATE, 1, S_IRUSR | S_IWUSR);
 	semctl(bs->sem_barber_ready, 0, SETVAL, (union semun) 0);
-	
+
 	bs->sem_customer_ready = semget(IPC_PRIVATE, 1, S_IRUSR | S_IWUSR);
 	semctl(bs->sem_customer_ready, 0, SETVAL, (union semun) 0);
 #else
@@ -155,12 +155,19 @@ void initialize_barber(int wr_cap) {
 
 void initialize_client(void) {
 #ifdef SYS_V
-	shared_memory = shmget(ftok(getpwuid(getuid())->pw_dir, 'B'), 0, 0);
+	char *home = getpwuid(getuid())->pw_dir;
+	key_t key = ftok(home, 'B');
+	if (key == -1) {
+		perror("Cannot create key");
+		exit(1);
+	}
+
+	shared_memory = shmget(key, 0, 0);
 	if (shared_memory == -1) {
 		perror("Cannot open shared memory");
 		exit(1);
 	}
-	
+
 	bs = shmat(shared_memory, NULL, 0);
 #else
 	shared_memory = shm_open(SHM_NAME, O_RDWR, 0);
@@ -168,25 +175,32 @@ void initialize_client(void) {
 		perror("Cannot open shared memory");
 		exit(1);
 	}
-
+	
 	struct stat statbuf;
 	if (fstat(shared_memory, &statbuf) != 0) {
 		perror("Cannot fstat shared memory");
 		exit(1);
 	}
-
+	
 	map_shm(statbuf.st_size);
 #endif
 }
 
 void dispose_barber(void) {
 #ifdef SYS_V
+	if(bs != (void*) -1) {
+		union semun dummy;
+		semctl(bs->mx_waiting_room, 0, IPC_RMID, dummy);
+		semctl(bs->sem_barber_sleeping, 0, IPC_RMID, dummy);
+		semctl(bs->sem_barber_ready, 0, IPC_RMID, dummy);
+		semctl(bs->sem_customer_ready, 0, IPC_RMID, dummy);
+	}
+
 	shmdt(bs);
-	
 	shmctl(shared_memory, IPC_RMID, NULL);
 #else
 	unmap_shm();
-
+	
 	shm_unlink(SHM_NAME);
 #endif
 }
@@ -200,17 +214,24 @@ void dispose_client(void) {
 }
 
 void log_barber(const char *message) {
-	printf("[BARBER] %s\n", message);
+	struct timespec tp;
+	clock_gettime(CLOCK_MONOTONIC, &tp);
+	printf("%ld.%ld [BARBER] %s\n", (long) tp.tv_sec, (long) tp.tv_nsec, message);
 	bs_sleep(1);
 }
 
 void log_barber2(const char *message, int i) {
-	printf("[BARBER] %s %d\n", message, i);
+	struct timespec tp;
+	clock_gettime(CLOCK_MONOTONIC, &tp);
+	printf("%ld.%ld [BARBER] %s %d\n", (long) tp.tv_sec, (long) tp.tv_nsec, message, i);
 	bs_sleep(1);
 }
 
 void log_client(const char *message) {
-	printf("[CLIENT %d] %s\n", (int) getpid(), message);
+	struct timespec tp;
+	clock_gettime(CLOCK_MONOTONIC, &tp);
+	printf("%ld.%ld [CLIENT %d] %s\n", (long) tp.tv_sec, (long) tp.tv_nsec, (int) getpid(),
+			message);
 	bs_sleep(1);
 }
 

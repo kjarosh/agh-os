@@ -16,12 +16,12 @@ union semun {
 typedef int semaphore_t;
 typedef int semaphore_p;
 
-#define conv_tp(s) s
+#define conv_tp(s) (s)
 #else
 typedef sem_t semaphore_t;
 typedef sem_t *semaphore_p;
 
-#define conv_tp(s) &s
+#define conv_tp(s) (&(s))
 #endif
 
 #define SHM_NAME "/barber"
