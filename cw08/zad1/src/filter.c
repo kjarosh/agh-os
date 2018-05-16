@@ -6,6 +6,8 @@
 
 filter_t *create_filter(int size) {
 	filter_t *filter = malloc(sizeof(filter_t) + sizeof(float) * size * size);
+	if (filter == NULL) return NULL;
+	
 	filter->size = size;
 	return filter;
 }
@@ -23,7 +25,7 @@ void random_filter(filter_t *filter) {
 	}
 }
 
-void apply_filter(filter_t *filter, pgm_image *image, int x, int y, int type) {
+pix_t apply_filter(filter_t *filter, pgm_image *from, int x, int y, int type) {
 	size_t c = filter->size + 1;
 	int center_x = x - ceil(c / 2);
 	int center_y = y - ceil(c / 2);
@@ -38,18 +40,18 @@ void apply_filter(filter_t *filter, pgm_image *image, int x, int y, int type) {
 			int yp = center_y + j;
 			
 			// it's beyond the image
-			if (xp < 0 || xp >= image->width || yp < 0 || yp >= image->height) {
+			if (xp < 0 || xp >= from->width || yp < 0 || yp >= from->height) {
 				if (type == FILTER_DISCARD) {
 					continue;
 				}
 				
 				xp = fmaxl(0, xp);
-				xp = fmaxl(image->width - 1, xp);
+				xp = fmaxl(from->width - 1, xp);
 				yp = fmaxl(0, yp);
-				yp = fmaxl(image->height - 1, yp);
+				yp = fmaxl(from->height - 1, yp);
 			}
 			
-			double pix = pgm_get_pixel(image, xp, yp);
+			double pix = pgm_get_pixel(from, xp, yp);
 			pix *= filter->data[j * filter->size + i];
 			
 			row_sum += pix;
@@ -60,7 +62,7 @@ void apply_filter(filter_t *filter, pgm_image *image, int x, int y, int type) {
 	}
 	
 	double norm = count / filter->size / filter->size;
-	pgm_set_pixel(image, x, y, (pix_t) round(sum * norm));
+	return (pix_t) round(sum * norm);
 }
 
 #define write_or_fail(...) do{ \
@@ -93,18 +95,23 @@ int write_filter(filter_t *filter, const char *filename) {
 	return 0;
 }
 
-int read_filter(filter_t *filter, const char *filename) {
+int read_filter(filter_t **ret, const char *filename) {
+	*ret = NULL;
 	FILE *fd = fopen(filename, "r");
 	if (fd == NULL) {
 		return -1;
 	}
 	
-	read_or_fail("%zu ", &filter->size);
+	size_t size;
+	read_or_fail("%zu ", &size);
+	filter_t *filter = create_filter(size);
 	
-	for (int d = 0; d < filter->size * filter->size; ++d) {
+	for (int d = 0; d < size * size; ++d) {
 		read_or_fail("%f ", &filter->data[d]);
 	}
 	
 	fclose(fd);
+	
+	*ret = filter;
 	return 0;
 }

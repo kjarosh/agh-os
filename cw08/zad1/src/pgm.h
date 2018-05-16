@@ -3,6 +3,8 @@
 
 #include <stdlib.h>
 
+#define pix_val(p) ((int)(unsigned char)(p))
+
 typedef char pix_t;
 
 typedef struct {
@@ -17,7 +19,7 @@ void pgm_destroy(pgm_image *img);
 pix_t pgm_get_pixel(pgm_image *img, int x, int y);
 void pgm_set_pixel(pgm_image *img, int x, int y, pix_t pix);
 
-int pgm_load(pgm_image *img, const char *filename);
+int pgm_load(pgm_image **img, const char *filename);
 int pgm_save(pgm_image *img, const char *filename);
 
 

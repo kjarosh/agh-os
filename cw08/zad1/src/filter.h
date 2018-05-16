@@ -15,9 +15,9 @@ filter_t *create_filter(int size);
 void destroy_filter(filter_t *filter);
 
 void random_filter(filter_t *filter);
-void apply_filter(filter_t *filter, pgm_image *image, int x, int y, int type);
+pix_t apply_filter(filter_t *filter, pgm_image *from, int x, int y, int type);
 
 int write_filter(filter_t *filter, const char *filename);
-int read_filter(filter_t *filter, const char *filename);
+int read_filter(filter_t **filter, const char *filename);
 
 #endif

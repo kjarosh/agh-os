@@ -4,6 +4,8 @@
 
 pgm_image *pgm_create(size_t width, size_t height) {
 	pgm_image *image = malloc(sizeof(pgm_image) + sizeof(pix_t) * width * height);
+	if (image == NULL) return NULL;
+	
 	image->width = width;
 	image->height = height;
 	return image;
@@ -46,7 +48,7 @@ int pgm_save(pgm_image *img, const char *filename) {
 	int d = 0;
 	for (int row = 0; row < img->height; ++row) {
 		for (int col = 0; col < img->width; ++col) {
-			write_or_fail("%d ", (int ) img->data[d++]);
+			write_or_fail("%d ", pix_val(img->data[d++]));
 		}
 		
 		write_or_fail("\n");
@@ -56,14 +58,21 @@ int pgm_save(pgm_image *img, const char *filename) {
 	return 0;
 }
 
-int pgm_load(pgm_image *img, const char *filename) {
+int pgm_load(pgm_image **ret, const char *filename) {
+	*ret = NULL;
 	FILE *fd = fopen(filename, "r");
 	if (fd == NULL) {
 		return -1;
 	}
 	
 	size_t max_val;
-	read_or_fail("P2 %zu %zu %zu ", &img->width, &img->height, &max_val);
+	size_t width, height;
+	read_or_fail("P2 %zu %zu %zu ", &width, &height, &max_val);
+	pgm_image *img = pgm_create(width, height);
+	if (img == NULL) {
+		fclose(fd);
+		return -1;
+	}
 	
 	int d = 0;
 	for (int row = 0; row < img->height; ++row) {
@@ -74,5 +83,6 @@ int pgm_load(pgm_image *img, const char *filename) {
 	}
 	
 	fclose(fd);
+	*ret = img;
 	return 0;
 }
