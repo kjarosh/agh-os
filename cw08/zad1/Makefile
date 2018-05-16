@@ -1,14 +1,14 @@
 CC=gcc
 CFLAGS=-std=c99 -Wall -ggdb -D_XOPEN_SOURCE=512 -D_DEFAULT_SOURCE
-LIBS=-pthread -lrt
+LIBS=-lm
 
-TARGET=client
+TARGET=main
 
 SRC=src
 BIN=bin
 OUT=out
 
-OBJS=main.o pgm.o
+OBJS=main.o pgm.o filter.o
 OBJS_PREF=$(addprefix $(BIN)/,$(OBJS))
 
 .PHONY: all dirs clean

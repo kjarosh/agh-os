@@ -22,14 +22,14 @@ void pgm_set_pixel(pgm_image *img, int x, int y, pix_t pix) {
 }
 
 #define write_or_fail(...) do{ \
-		if(fprintf(fd, __VA_ARGS__) != 0){ \
+		if(fprintf(fd, __VA_ARGS__) < 0){ \
 			fclose(fd); \
 			return -1; \
 		} \
 	}while(0)
 
 #define read_or_fail(...) do{ \
-		if(fscanf(fd, __VA_ARGS__) != 0){ \
+		if(fscanf(fd, __VA_ARGS__) < 0){ \
 			fclose(fd); \
 			return -1; \
 		} \
@@ -76,6 +76,3 @@ int pgm_load(pgm_image *img, const char *filename) {
 	fclose(fd);
 	return 0;
 }
-
-#undef write_or_fail
-#undef read_or_fail
