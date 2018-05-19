@@ -1,5 +1,6 @@
 CC=gcc
 CFLAGS=-std=c99 -Wall -ggdb -D_XOPEN_SOURCE=512 -D_DEFAULT_SOURCE
+LFLAGS=-pthread
 LIBS=-lm
 
 TARGET=main
@@ -22,7 +23,7 @@ $(BIN)/%.o: $(SRC)/%.c | dirs
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 $(OUT)/$(TARGET): $(OBJS_PREF)
-	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
+	$(CC) $(CFLAGS) $(LFLAGS) -o $@ $^ $(LIBS)
 
 dirs: | $(OUT) $(BIN)
 

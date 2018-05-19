@@ -46,9 +46,9 @@ pix_t apply_filter(filter_t *filter, pgm_image *from, int x, int y, int type) {
 				}
 				
 				xp = fmaxl(0, xp);
-				xp = fmaxl(from->width - 1, xp);
+				xp = fminl(from->width - 1, xp);
 				yp = fmaxl(0, yp);
-				yp = fmaxl(from->height - 1, yp);
+				yp = fminl(from->height - 1, yp);
 			}
 			
 			double pix = pgm_get_pixel(from, xp, yp);
@@ -105,6 +105,10 @@ int read_filter(filter_t **ret, const char *filename) {
 	size_t size;
 	read_or_fail("%zu ", &size);
 	filter_t *filter = create_filter(size);
+	if (filter == NULL) {
+		fclose(fd);
+		return -1;
+	}
 	
 	for (int d = 0; d < size * size; ++d) {
 		read_or_fail("%f ", &filter->data[d]);
