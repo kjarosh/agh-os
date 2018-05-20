@@ -4,6 +4,8 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <sched.h>
+#include <sys/times.h>
 
 #include "filter.h"
 #include "pgm.h"
@@ -30,6 +32,7 @@ static void print_help(char *program) {
 filter_t *f = NULL;
 pgm_image *in_image = NULL;
 pgm_image *out_image = NULL;
+long pixel_count = 0;
 
 int pixels_processed = 0;
 sem_t pp_sem;
@@ -40,21 +43,22 @@ void dispose() {
 	pgm_destroy(out_image);
 }
 
-void *thread_run(void *args) {
-	int id = ((struct thread_args*) args)->thread_id;
-	int count = ((struct thread_args*) args)->thread_count;
-	free(args);
+void *thread_run(void *args0) {
+	struct thread_args *args = (struct thread_args*) args0;
+	int id = args->thread_id;
+	int count = args->thread_count;
 	
-	int pixel_count = in_image->height * in_image->width;
-	int processed = 0;
-	for (int pixel = id; pixel < pixel_count; pixel += count) {
+	long processed = 0;
+	long total = 0;
+	for (long pixel = id; pixel < pixel_count; pixel += count) {
+		++total;
 		int x = pixel % in_image->width;
 		int y = pixel / in_image->width;
 		pgm_set_pixel(out_image, x, y, apply_filter(f, in_image, x, y, FILTER_STRETCH));
 		
 		++processed;
 		
-		if (processed > 5 && sem_trywait(&pp_sem) == 0) {
+		if (processed > count + 5 && sem_trywait(&pp_sem) == 0) {
 			pixels_processed += processed;
 			processed = 0;
 			
@@ -62,6 +66,8 @@ void *thread_run(void *args) {
 		}
 	}
 	
+	free(args);
+	printf("Thread %d done, %ld/%ld pixels\n", id, total, pixel_count);
 	return NULL;
 }
 
@@ -69,9 +75,9 @@ void *thread_progress(void *args) {
 	int pixels_count = in_image->width * in_image->height;
 	
 	while (1) {
-		printf("\rProgress: %lf%%", pixels_processed * 100. / pixels_count);
+		printf("\rProgress: %.2lf%%", pixels_processed * 100. / pixels_count);
 		fflush(stdout);
-		sleep(1);
+		usleep(1000000 / 5);
 	}
 }
 
@@ -109,8 +115,14 @@ int main(int argc, char **argv) {
 	char *filter = argv[3];
 	char *output = argv[4];
 	
+	if (thread_count <= 0) {
+		fprintf(stderr, "Invalid number of threads\n");
+		return 1;
+	}
+	
 	run_or_fail(read_filter(&f, filter), "Cannot read filter");
 	run_or_fail(pgm_load(&in_image, input), "Cannot read input file");
+	pixel_count = in_image->height * in_image->width;
 	
 	out_image = pgm_create(in_image->width, in_image->height);
 	if (out_image == NULL) {
@@ -121,9 +133,12 @@ int main(int argc, char **argv) {
 	
 	printf("Using %d threads\n", thread_count);
 	if (thread_count > sysconf(_SC_NPROCESSORS_ONLN)) {
-		fprintf(stderr, "Warning: this system has only %ld processors available,"
+		printf("Warning: this system has only %ld processors available, "
 				"using greater number will be slower\n", sysconf(_SC_NPROCESSORS_ONLN));
 	}
+	
+	struct tms tms;
+	clock_t time = times(&tms);
 	
 	pthread_t progress;
 	pthread_create(&progress, NULL, thread_progress, NULL);
@@ -152,12 +167,15 @@ int main(int argc, char **argv) {
 		}
 	}
 	
+	time = time == ((clock_t) -1) ? time : (times(&tms) - time);
+	
 	pthread_cancel(progress);
 	// print a new line after the progress
 	printf("\n");
 	
 	run_or_fail(pgm_save(out_image, output), "Cannot save file");
 	
+	printf("Total time: %lfs\n", (double) time / sysconf(_SC_CLK_TCK));
 	// ------------------------------------
 	
 	dispose();
