@@ -1,6 +1,7 @@
 #include "pgm.h"
 
 #include <stdio.h>
+#include <errno.h>
 
 pgm_image *pgm_create(size_t width, size_t height) {
 	pgm_image *image = malloc(sizeof(pgm_image) + sizeof(pix_t) * width * height);
@@ -30,8 +31,10 @@ void pgm_set_pixel(pgm_image *img, int x, int y, pix_t pix) {
 		} \
 	}while(0)
 
-#define read_or_fail(...) do{ \
-		if(fscanf(fd, __VA_ARGS__) < 0){ \
+#define read_or_fail(n, ...) do{ \
+		int __fscanf_ret = fscanf(fd, __VA_ARGS__); \
+		if(__fscanf_ret != n){ \
+			if(__fscanf_ret != EOF) errno = EINVAL; \
 			fclose(fd); \
 			return -1; \
 		} \
@@ -67,7 +70,7 @@ int pgm_load(pgm_image **ret, const char *filename) {
 	
 	size_t max_val;
 	size_t width, height;
-	read_or_fail("P2 %zu %zu %zu ", &width, &height, &max_val);
+	read_or_fail(3, "P2 %zu %zu %zu ", &width, &height, &max_val);
 	pgm_image *img = pgm_create(width, height);
 	if (img == NULL) {
 		fclose(fd);
@@ -77,7 +80,7 @@ int pgm_load(pgm_image **ret, const char *filename) {
 	int d = 0;
 	for (int row = 0; row < img->height; ++row) {
 		for (int col = 0; col < img->width; ++col) {
-			read_or_fail("%d ", (int * ) &img->data[d]);
+			read_or_fail(1, "%d ", (int * ) &img->data[d]);
 			img->data[d++] *= 255.f / max_val;
 		}
 	}

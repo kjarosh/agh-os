@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <errno.h>
 
 filter_t *create_filter(int size) {
 	filter_t *filter = malloc(sizeof(filter_t) + sizeof(float) * size * size);
@@ -72,8 +73,10 @@ pix_t apply_filter(filter_t *filter, pgm_image *from, int x, int y, int type) {
 		} \
 	}while(0)
 
-#define read_or_fail(...) do{ \
-		if(fscanf(fd, __VA_ARGS__) < 0){ \
+#define read_or_fail(n, ...) do{ \
+		int __fscanf_ret = fscanf(fd, __VA_ARGS__); \
+		if(__fscanf_ret != n){ \
+			if(__fscanf_ret != EOF) errno = EINVAL; \
 			fclose(fd); \
 			return -1; \
 		} \
@@ -103,7 +106,7 @@ int read_filter(filter_t **ret, const char *filename) {
 	}
 	
 	size_t size;
-	read_or_fail("%zu ", &size);
+	read_or_fail(1, "%zu ", &size);
 	filter_t *filter = create_filter(size);
 	if (filter == NULL) {
 		fclose(fd);
@@ -111,7 +114,7 @@ int read_filter(filter_t **ret, const char *filename) {
 	}
 	
 	for (int d = 0; d < size * size; ++d) {
-		read_or_fail("%f ", &filter->data[d]);
+		read_or_fail(1, "%f ", &filter->data[d]);
 	}
 	
 	fclose(fd);

@@ -67,7 +67,9 @@ void *thread_run(void *args0) {
 	}
 	
 	free(args);
+#ifdef DEBUG
 	printf("Thread %d done, %ld/%ld pixels\n", id, total, pixel_count);
+#endif
 	return NULL;
 }
 
@@ -133,8 +135,8 @@ int main(int argc, char **argv) {
 	
 	printf("Using %d threads\n", thread_count);
 	if (thread_count > sysconf(_SC_NPROCESSORS_ONLN)) {
-		printf("Warning: this system has only %ld processors available, "
-				"using greater number will be slower\n", sysconf(_SC_NPROCESSORS_ONLN));
+		printf("Warning: this system has only %ld processors available\n",
+				sysconf(_SC_NPROCESSORS_ONLN));
 	}
 	
 	struct tms tms;
@@ -175,7 +177,10 @@ int main(int argc, char **argv) {
 	
 	run_or_fail(pgm_save(out_image, output), "Cannot save file");
 	
-	printf("Total time: %lfs\n", (double) time / sysconf(_SC_CLK_TCK));
+	if (time != ((clock_t) -1)) {
+		printf("Total time: %.4lfs\n", (double) time / sysconf(_SC_CLK_TCK));
+	}
+	
 	// ------------------------------------
 	
 	dispose();
