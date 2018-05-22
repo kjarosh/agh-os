@@ -22,5 +22,4 @@ void pgm_set_pixel(pgm_image *img, int x, int y, pix_t pix);
 int pgm_load(pgm_image **img, const char *filename);
 int pgm_save(pgm_image *img, const char *filename);
 
-
 #endif

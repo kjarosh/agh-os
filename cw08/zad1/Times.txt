@@ -1,0 +1,24 @@
+# Rozmiar obrazu: 640x480
+# Rozmiar filtru: 50x50
+# 8 procesorów
+
+  wątki  |  czas 1 [s]   czas 2 [s]   czas śr. [s]  |  procent [%]   pr. oczek. [%]  |  odchylenie [%]
+ ------- | ------------ ------------ -------------- | ------------- ---------------- | ----------------
+      1  |      93.100       92.880         92.990  |  100.00        100.00          |  0.00
+      2  |      46.890       46.880         46.885  |   50.41         50.00          |  0.41
+      3  |      31.380       31.530         31.455  |   33.82         33.33          |  0.49
+      4  |      23.540       23.530         23.535  |   25.30         25.00          |  0.30
+      6  |      15.670       15.670         15.670  |   16.85         16.67          |  0.18
+      8  |      11.820       12.040         11.930  |   12.82         12.50          |  0.32
+     12  |      12.190       12.050         12.120  |   13.03          8.33          |  4.70
+     16  |      11.910       12.130         12.020  |   12.92          6.25          |  6.67
+
+Komentarz:
+----------
+Wykorzystanie wielowątkowości pozwoliło nam na ograniczenie czasu wykonania
+programu dzięki lepszemu wykorzystaniu czasu procesora. Zgodnie ze spodziewanymi
+wynikami, otrzymaliśmy czasy odwrotnie proporcjonalne do ilości użytych wątków.
+Również z wyników wywnioskować można, że procesor ten był 8-rdzeniowy, gdyż po
+8 wątkach wyniki zaczynały odbiegać od przewidywanych czasów. Po przekroczeniu
+marginesu 8 wątków, czasy stawały się nawet większe -- wynikało to z
+wykorzystania czasu procesora na przełączanie się pomiędzy wątkami.
