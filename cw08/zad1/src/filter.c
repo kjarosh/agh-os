@@ -19,51 +19,56 @@ void destroy_filter(filter_t *filter) {
 
 void random_filter(filter_t *filter) {
 	float norm = 2.f / filter->size / filter->size;
+	double sum = 0.;
 	for (int i = 0; i < filter->size; ++i) {
 		for (int j = 0; j < filter->size; ++j) {
-			filter->data[j * filter->size + i] = (float) rand() / RAND_MAX * norm;
+			float val = (float) rand() / RAND_MAX * norm;
+			filter->data[j * filter->size + i] = val;
+			
+			sum += val;
 		}
 	}
+	
+	printf("Sum: %lf\n", sum);
+	double sum2 = 0.;
+	
+	for (int i = 0; i < filter->size; ++i) {
+		for (int j = 0; j < filter->size; ++j) {
+			filter->data[j * filter->size + i] /= sum;
+			sum2 += filter->data[j * filter->size + i];
+		}
+	}
+	
+	printf("After normalization: %lf\n", sum2);
 }
 
-pix_t apply_filter(filter_t *filter, pgm_image *from, int x, int y, int type) {
-	size_t c = filter->size + 1;
+pix_t apply_filter(filter_t *filter, pgm_image *from, int x, int y) {
+	size_t c = filter->size;
 	int center_x = x - ceil(c / 2);
 	int center_y = y - ceil(c / 2);
 	
 	double sum = 0;
-	int count = 0;
 	
 	for (int i = 0; i < filter->size; ++i) {
-		double row_sum = 0;
+		double col_sum = 0.;
 		for (int j = 0; j < filter->size; ++j) {
 			int xp = center_x + i;
 			int yp = center_y + j;
 			
-			// it's beyond the image
-			if (xp < 0 || xp >= from->width || yp < 0 || yp >= from->height) {
-				if (type == FILTER_DISCARD) {
-					continue;
-				}
-				
-				xp = fmaxl(0, xp);
-				xp = fminl(from->width - 1, xp);
-				yp = fmaxl(0, yp);
-				yp = fminl(from->height - 1, yp);
-			}
+			xp = fmaxl(0, xp);
+			xp = fminl(from->width - 1, xp);
+			yp = fmaxl(0, yp);
+			yp = fminl(from->height - 1, yp);
 			
-			double pix = pgm_get_pixel(from, xp, yp);
-			pix *= filter->data[j * filter->size + i];
+			double pix = (double) pgm_get_pixel(from, xp, yp);
 			
-			row_sum += pix;
-			++count;
+			col_sum += pix * filter->data[j * c + i];
 		}
 		
-		sum += row_sum;
+		sum += col_sum;
 	}
 	
-	double norm = count / filter->size / filter->size;
-	return (pix_t) round(sum * norm);
+	return (pix_t) round(sum);
 }
 
 #define write_or_fail(...) do{ \

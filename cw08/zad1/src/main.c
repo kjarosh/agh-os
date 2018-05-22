@@ -54,7 +54,7 @@ void *thread_run(void *args0) {
 		++total;
 		int x = pixel % in_image->width;
 		int y = pixel / in_image->width;
-		pgm_set_pixel(out_image, x, y, apply_filter(f, in_image, x, y, FILTER_STRETCH));
+		pgm_set_pixel(out_image, x, y, apply_filter(f, in_image, x, y));
 		
 		++processed;
 		

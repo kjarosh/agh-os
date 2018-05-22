@@ -5,7 +5,7 @@
 
 #define pix_val(p) ((int)(unsigned char)(p))
 
-typedef char pix_t;
+typedef unsigned char pix_t;
 
 typedef struct {
 	size_t width;
