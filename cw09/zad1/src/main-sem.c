@@ -4,7 +4,9 @@
 #include <stdbool.h>
 #include <string.h>
 #include <semaphore.h>
+#include <unistd.h>
 #include <signal.h>
+#include <time.h>
 #include "cl.h"
 #include "buffer.h"
 #include "runner.h"
@@ -31,6 +33,10 @@ sem_t consumer_line;
 void *producer(void *data) {
 	int id = *((int*) data);
 	
+	if(cl.sleep > 0){
+		usleep(rand() % (cl.sleep * 1000000));
+	}
+	
 	log_producer(id, "Initializing");
 	
 	FILE *input = fopen(cl.filename, "r");
@@ -46,8 +52,6 @@ void *producer(void *data) {
 	while (getline(&line, &n, input) != -1) {
 		line = strtok(line, "\n");
 		if (line == NULL) continue;
-		
-		log_producer(id, "Line read, pushing...");
 		
 		sem_wait_f(&buffer_mx);
 		
@@ -70,7 +74,6 @@ void *producer(void *data) {
 		n = 0;
 	}
 	
-	perror("test");
 	log_producer(id, "No more lines to produce, exiting...");
 	
 	return NULL;
@@ -79,18 +82,23 @@ void *producer(void *data) {
 void *consumer(void *data) {
 	int id = *((int*) data);
 	
+	if(cl.sleep > 0){
+		usleep(rand() % (cl.sleep * 1000000));
+	}
+	
 	log_consumer(id, "Initializing");
 	
+	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 	while (1) {
-		log_consumer(id, "Consuming...");
-		
 		sem_wait_f(&buffer_mx);
 		
 		while (buffer_empty()) {
 			sem_post_f(&buffer_mx);
 			
 			log_consumer(id, "Buffer empty, waiting...");
+			pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 			sem_wait_f(&consumer_line);
+			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 			
 			sem_wait_f(&buffer_mx);
 		}
@@ -106,6 +114,10 @@ void *consumer(void *data) {
 			printf("%s\n", line);
 		}
 		
+		if(cl.sleep > 0){
+			sleep(cl.sleep);
+		}
+		
 		free(line);
 	}
 	
@@ -117,6 +129,7 @@ void sighandler(int sig){
 }
 
 int main(int argc, char **argv) {
+	srand(time(NULL));
 	signal(SIGINT, sighandler);
 	logger_cl = &cl;
 	if (cl_initialize(&cl, argc, argv) != 0) {

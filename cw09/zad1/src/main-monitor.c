@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <signal.h>
+#include <unistd.h>
 #include "cl.h"
 #include "buffer.h"
 #include "runner.h"
@@ -21,6 +22,10 @@ void unlock_mx(void *args) {
 void *producer(void *data) {
 	int id = *((int*) data);
 	
+	if(cl.sleep > 0){
+		usleep(rand() % (cl.sleep * 1000000));
+	}
+	
 	log_producer(id, "Initializing");
 	
 	FILE *input = fopen(cl.filename, "r");
@@ -37,7 +42,6 @@ void *producer(void *data) {
 		line = strtok(line, "\n");
 		if (line == NULL) continue;
 		
-		log_producer(id, "Line read, pushing...");
 		pthread_testcancel();
 		
 		if (pthread_mutex_lock(&buffer_mx) != 0) {
@@ -56,8 +60,9 @@ void *producer(void *data) {
 			pthread_cleanup_pop(0);
 		}
 		
-		pthread_cond_signal(&consumer_line);
 		log_producer(id, "Pushed");
+		
+		pthread_cond_signal(&consumer_line);
 		
 		if (pthread_mutex_unlock(&buffer_mx) != 0) {
 			perror("Cannot unlock a mutex");
@@ -66,6 +71,10 @@ void *producer(void *data) {
 		
 		line = NULL;
 		n = 0;
+		
+		if(cl.sleep > 0){
+			sleep(cl.sleep);
+		}
 	}
 	
 	log_producer(id, "No more lines to produce, exiting...");
@@ -76,12 +85,14 @@ void *producer(void *data) {
 void *consumer(void *data) {
 	int id = *((int*) data);
 	
+	if(cl.sleep > 0){
+		usleep(rand() % (cl.sleep * 1000000));
+	}
+	
 	log_consumer(id, "Initializing");
 	
+	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 	while (1) {
-		log_consumer(id, "Consuming...");
-		pthread_testcancel();
-		
 		if (pthread_mutex_lock(&buffer_mx) != 0) {
 			perror("Cannot lock a mutex");
 			exit(-1);
@@ -91,12 +102,14 @@ void *consumer(void *data) {
 		while (buffer_pop(&line) != 0) {
 			log_consumer(id, "Buffer empty, waiting...");
 			
+			pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 			pthread_cleanup_push(unlock_mx, NULL);
 			if (pthread_cond_wait(&consumer_line, &buffer_mx) != 0) {
 				perror("Cannot wait on condition");
 				exit(-1);
 			}
 			pthread_cleanup_pop(0);
+			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 		}
 		
 		pthread_cond_signal(&producer_line);
@@ -111,6 +124,10 @@ void *consumer(void *data) {
 			printf("%s\n", line);
 		}
 		
+		if(cl.sleep > 0){
+			sleep(cl.sleep);
+		}
+		
 		free(line);
 	}
 	
@@ -122,6 +139,7 @@ void sighandler(int sig){
 }
 
 int main(int argc, char **argv) {
+	srand(time(NULL));
 	signal(SIGINT, sighandler);
 	logger_cl = &cl;
 	if (cl_initialize(&cl, argc, argv) != 0) {

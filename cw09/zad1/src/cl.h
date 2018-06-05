@@ -16,6 +16,7 @@ struct cl {
 	
 	int time_limit;
 	int verbose;
+	int sleep;
 };
 
 int cl_initialize(struct cl *cl, int argc, char **argv);

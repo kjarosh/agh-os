@@ -18,6 +18,7 @@ int __cl_read_config(struct cl *cl, FILE *file) {
 	cl->line_length = -1;
 	cl->cmp = GT;
 	cl->verbose = 0;
+	cl->sleep = 0;
 	
 	int buf_s = 4 * 1024;
 	char buf[buf_s];
@@ -44,6 +45,8 @@ int __cl_read_config(struct cl *cl, FILE *file) {
 			cl->time_limit = atoi(value);
 		} else if (strcmp(name, "verbose") == 0) {
 			cl->verbose = atoi(value);
+		} else if (strcmp(name, "sleep") == 0) {
+			cl->sleep = atoi(value);
 		} else if (strcmp(name, "length") == 0) {
 			if (value[0] == '<') {
 				cl->cmp = LT;
