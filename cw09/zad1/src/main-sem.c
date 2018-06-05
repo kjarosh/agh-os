@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <semaphore.h>
+#include <signal.h>
 #include "cl.h"
 #include "buffer.h"
 #include "runner.h"
@@ -111,7 +112,13 @@ void *consumer(void *data) {
 	return NULL;
 }
 
+void sighandler(int sig){
+	exit(0);
+}
+
 int main(int argc, char **argv) {
+	signal(SIGINT, sighandler);
+	logger_cl = &cl;
 	if (cl_initialize(&cl, argc, argv) != 0) {
 		fprintf(stderr, "Failed to initialize command line\n");
 		return -1;

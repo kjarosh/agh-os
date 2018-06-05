@@ -91,12 +91,12 @@ void *consumer(void *data) {
 		while (buffer_pop(&line) != 0) {
 			log_consumer(id, "Buffer empty, waiting...");
 			
-			pthread_cleanup_push(unlock_mx, NULL)
-						if (pthread_cond_wait(&consumer_line, &buffer_mx) != 0) {
-							perror("Cannot wait on condition");
-							exit(-1);
-						}
-						pthread_cleanup_pop(0);
+			pthread_cleanup_push(unlock_mx, NULL);
+			if (pthread_cond_wait(&consumer_line, &buffer_mx) != 0) {
+				perror("Cannot wait on condition");
+				exit(-1);
+			}
+			pthread_cleanup_pop(0);
 		}
 		
 		pthread_cond_signal(&producer_line);
@@ -123,6 +123,7 @@ void sighandler(int sig){
 
 int main(int argc, char **argv) {
 	signal(SIGINT, sighandler);
+	logger_cl = &cl;
 	if (cl_initialize(&cl, argc, argv) != 0) {
 		fprintf(stderr, "Failed to initialize command line\n");
 		return -1;

@@ -15,8 +15,7 @@ struct cl {
 	enum comparison_t cmp;
 	
 	int time_limit;
-	
-	int print_mode; // ?
+	int verbose;
 };
 
 int cl_initialize(struct cl *cl, int argc, char **argv);
