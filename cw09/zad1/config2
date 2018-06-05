@@ -1,0 +1,11 @@
+producers = 1
+consumers = 1
+
+buffer-size = 1
+file = input
+
+time-limit = 0
+length = 6
+
+verbose = 0
+
