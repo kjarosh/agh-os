@@ -128,9 +128,17 @@ void sighandler(int sig){
 	exit(0);
 }
 
+void cleanup(){
+	sem_destroy(&producer_line);
+	sem_destroy(&consumer_line);
+	sem_destroy(&buffer_mx);
+}
+
 int main(int argc, char **argv) {
 	srand(time(NULL));
 	signal(SIGINT, sighandler);
+	atexit(cleanup);
+	
 	logger_cl = &cl;
 	if (cl_initialize(&cl, argc, argv) != 0) {
 		fprintf(stderr, "Failed to initialize command line\n");
