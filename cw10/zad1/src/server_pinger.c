@@ -23,8 +23,10 @@ void *thread_pinger(void *args) {
 				print_prompt();
 				clients[i].cl_active = 0;
 				
+#ifndef CONF_DATAGRAM
 				shutdown(clients[i].cl_sock, SHUT_RDWR);
 				close(clients[i].cl_sock);
+#endif
 			} else {
 				clients[i].cl_inactivity++;
 				

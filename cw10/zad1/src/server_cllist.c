@@ -56,7 +56,8 @@ void register_client(int sock, struct socket_message *sm) {
 	name[sm->length - 1] = 0;
 	
 	if (is_name_taken(name)) {
-		fprintf(stderr, "Connection refused to client: name '%s' taken\n", name);
+		printf("\rConnection refused to client: name '%s' taken\n", name);
+		print_prompt();
 		
 		sm->length = 1;
 		sm->buffer[0] = MSG_TYPE_NAMEINUSE;
@@ -94,14 +95,17 @@ void unregister_client(int client_id) {
 	if (client_id >= 0) {
 		clients[client_id].cl_active = 0;
 		
+#ifndef CONF_DATAGRAM
+		// on UDP we do not close sockets as those are
+		// server's sockets
+		
 		shutdown(clients[client_id].cl_sock, SHUT_RDWR);
 		// sock is automatically removed from epoll upon closing
 		close(clients[client_id].cl_sock);
+#endif
 		
 		printf("\rClient '%s' disconnected\n", clients[client_id].cl_name);
 		print_prompt();
-	} else {
-		printf("Received unregister from an unknown client\n");
 	}
 	
 	zero_or_fail(pthread_mutex_unlock(&clients_mx), "Cannot unlock clients");
@@ -111,8 +115,10 @@ void teardown_clients(void) {
 	for (int i = 0; i < CONF_CLIENTS_MAX; ++i) {
 		if (clients[i].cl_active) {
 			clients[i].cl_active = 0;
+#ifndef CONF_DATAGRAM
 			shutdown(clients[i].cl_sock, SHUT_RDWR);
 			close(clients[i].cl_sock);
+#endif
 		}
 	}
 }

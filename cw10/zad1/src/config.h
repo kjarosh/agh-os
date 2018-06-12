@@ -7,9 +7,11 @@
 #include <netinet/in.h>
 #include <netinet/ip.h>
 
-#define CONF_INACTIVITY_MAX 5
+// after sending 3 pings and not receiving
+//  a single pong, the client is disconnected
+#define CONF_INACTIVITY_MAX 3
 // 2 seconds
-#define CONF_PING_INTERVAL 2
+#define CONF_PING_INTERVAL 3
 
 #define CONF_CLIENTS_MAX 16
 #define CONF_CLIENT_NAME_MAX 256

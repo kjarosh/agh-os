@@ -17,12 +17,6 @@
 
 pthread_t listener;
 
-void handle_register(int sock, struct socket_message *sm) {
-	// it only works on UDP
-	
-	register_client(sock, sm);
-}
-
 void handle_pong(int client_id) {
 	zero_or_fail(pthread_mutex_lock(&clients_mx), "Cannot lock clients");
 	
@@ -65,7 +59,6 @@ void *thread_listen(void *args) {
 		
 		struct socket_message sm;
 		if (receive_sm(sock, &sm) != 0) {
-			printf("Error on %d\n", sock);
 			sleep(1);
 			continue;
 		}
@@ -79,7 +72,7 @@ void *thread_listen(void *args) {
 #endif
 		zero_or_fail(pthread_mutex_unlock(&clients_mx), "Cannot unlock clients");
 		
-		if (client_id < 0 && msg_type != MSG_TYPE_REGISTER) {
+		if (client_id < 0 && msg_type != MSG_TYPE_REGISTER && msg_type != MSG_TYPE_UNREGISTER) {
 			printf("\rReceived a message from an unknown client\n");
 			print_prompt();
 			continue;
@@ -87,7 +80,8 @@ void *thread_listen(void *args) {
 		
 		switch (msg_type) {
 		case MSG_TYPE_REGISTER:
-			handle_register(sock, &sm);
+			// it only works on UDP
+			register_client(sock, &sm);
 			break;
 			
 		case MSG_TYPE_UNREGISTER:

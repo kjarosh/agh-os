@@ -30,7 +30,7 @@ int sock_local;
 
 int waiting_poll;
 
-void print_prompt(){
+void print_prompt() {
 	printf("in [%d]: ", current_request_id);
 	fflush(stdout);
 }
@@ -147,14 +147,14 @@ int main(int argc, char **argv) {
 	
 	print_prompt();
 	
-	while (1){
+	while (1) {
 		read_request();
 		
 		print_prompt();
 	}
 }
 
-int send_request(int clid, struct request_t *req){
+int send_request(int clid, struct request_t *req) {
 	struct socket_message sm;
 	sm.addr = clients[clid].addr;
 	sm.length = 1 + sizeof(struct request_t);
@@ -192,12 +192,13 @@ int read_request(void) {
 	}
 	
 	int clid = next_free_client();
-	if(clid < 0){
+	if (clid < 0) {
 		printf("error: no available clients\n");
 		return 1;
 	}
 	
-	if(send_request(clid, &req) != 0){
+	if (send_request(clid, &req) != 0) {
+		perror("");
 		printf("error: failed to send request\n");
 		return 1;
 	}

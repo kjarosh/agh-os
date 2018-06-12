@@ -24,7 +24,7 @@ static void sighandler(int sig) {
 }
 
 static void cleanup(void) {
-	if(server_sock < 0) return;
+	if (server_sock < 0) return;
 	
 	printf("\rShutting down...\n");
 	
@@ -116,6 +116,15 @@ int main(int argc, char **argv) {
 		exit(-1);
 	}
 	
+#ifdef CONF_DATAGRAM
+	if (server_addr.saddr.sa_family == AF_LOCAL) {
+		// need to bind
+		
+		sa_family_t sa_family = AF_LOCAL;
+		bind(server_sock, (struct sockaddr*) &sa_family, sizeof(sa_family));
+	}
+#endif
+	
 	if (connect(server_sock, &server_addr.saddr, server_addr.len) != 0) {
 		perror("Cannot connect");
 		exit(-1);
@@ -133,7 +142,7 @@ int main(int argc, char **argv) {
 void receive_request(void) {
 	struct socket_message sm;
 	if (receive_sm(server_sock, &sm) != 0) {
-		if(errno == 0){
+		if (errno == 0) {
 			// socket closed
 			printf("Server closed\n");
 			exit(0);
@@ -176,7 +185,7 @@ void receive_request(void) {
 		exit(0);
 		
 	default:
-		printf("Unknown message type: %d\n", (int)msg_type);
+		printf("Unknown message type: %d\n", (int) msg_type);
 		return;
 	}
 	
