@@ -1,6 +1,7 @@
 #include "server_pinger.h"
 
 #include "server.h"
+#include "server_cllist.h"
 #include "connection.h"
 
 #include <stdio.h>
@@ -14,6 +15,7 @@ void *thread_pinger(void *args) {
 	while (1) {
 		pthread_testcancel();
 		
+		lock_clients();
 		for (int i = 0; i < CONF_CLIENTS_MAX; ++i) {
 			if (!clients[i].cl_active) continue;
 			
@@ -39,6 +41,7 @@ void *thread_pinger(void *args) {
 				send_sm(clients[i].cl_sock, &sm);
 			}
 		}
+		unlock_clients();
 		
 		sleep(CONF_PING_INTERVAL);
 	}
@@ -53,4 +56,8 @@ void setup_pinger(void) {
 
 void cancel_pinger(void) {
 	pthread_cancel(pinger);
+	struct timespec ts;
+	ts.tv_sec = 1;
+	ts.tv_nsec = 0;
+	pthread_timedjoin_np(pinger, NULL, &ts);
 }

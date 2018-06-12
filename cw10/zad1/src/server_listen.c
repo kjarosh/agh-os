@@ -11,6 +11,7 @@
 
 #include "config.h"
 #include "server.h"
+#include "server_cllist.h"
 #include "server_accept.h"
 #include "request.h"
 #include "connection.h"
@@ -18,11 +19,7 @@
 pthread_t listener;
 
 void handle_pong(int client_id) {
-	zero_or_fail(pthread_mutex_lock(&clients_mx), "Cannot lock clients");
-	
 	clients[client_id].cl_inactivity = 0;
-	
-	zero_or_fail(pthread_mutex_unlock(&clients_mx), "Cannot unlock clients");
 }
 
 void handle_response(int client_id, struct socket_message *sm) {
@@ -64,13 +61,11 @@ void *thread_listen(void *args) {
 		}
 		char msg_type = sm.buffer[0];
 		
-		zero_or_fail(pthread_mutex_lock(&clients_mx), "Cannot lock clients");
 #ifdef CONF_DATAGRAM
 		int client_id = client_for_addr(&sm.addr.saddr, sm.addr.len);
 #else
 		int client_id = client_for_sock(sock);
 #endif
-		zero_or_fail(pthread_mutex_unlock(&clients_mx), "Cannot unlock clients");
 		
 		if (client_id < 0 && msg_type != MSG_TYPE_REGISTER && msg_type != MSG_TYPE_UNREGISTER) {
 			printf("\rReceived a message from an unknown client\n");
@@ -119,4 +114,8 @@ void setup_listener(void) {
 
 void cancel_listener(void) {
 	pthread_cancel(listener);
+	struct timespec ts;
+	ts.tv_sec = 1;
+	ts.tv_nsec = 0;
+	pthread_timedjoin_np(listener, NULL, &ts);
 }

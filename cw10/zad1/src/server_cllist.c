@@ -7,48 +7,81 @@
 #include <pthread.h>
 #include <unistd.h>
 
-pthread_mutex_t clients_mx = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t clients_mx;
 struct client_t clients[CONF_CLIENTS_MAX];
 
+void setup_client_mutex(){
+	pthread_mutexattr_t attr;
+	
+	pthread_mutexattr_init(&attr);
+	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+	pthread_mutex_init(&clients_mx, &attr);
+	pthread_mutexattr_destroy(&attr);
+}
+
+void teardown_client_mutex(){
+	pthread_mutex_destroy(&clients_mx);
+}
+
 int client_freeid(void) {
+	int ret = -1;
+	lock_clients();
+	
 	for (int i = 0; i < CONF_CLIENTS_MAX; ++i) {
 		if (clients[i].cl_active == 0) {
-			return i;
+			ret = i;
+			break;
 		}
 	}
 	
-	return -1;
+	unlock_clients();
+	return ret;
 }
 
 int client_for_addr(struct sockaddr *addr, socklen_t len) {
+	int ret = -1;
+	lock_clients();
+	
 	for (int i = 0; i < CONF_CLIENTS_MAX; ++i) {
 		if (clients[i].cl_active != 0 && len == clients[i].addr.len
 				&& memcmp(&clients[i].addr.in_addr, addr, len) == 0) {
-			return i;
+			ret = i;
+			break;
 		}
 	}
 	
-	return -1;
+	unlock_clients();
+	return ret;
 }
 
 int client_for_sock(int sock) {
+	int ret = -1;
+	lock_clients();
+	
 	for (int i = 0; i < CONF_CLIENTS_MAX; ++i) {
 		if (clients[i].cl_active != 0 && sock == clients[i].cl_sock) {
-			return i;
+			ret = i;
+			break;
 		}
 	}
 	
-	return -1;
+	unlock_clients();
+	return ret;
 }
 
 int is_name_taken(const char *name) {
+	int ret = 0;
+	lock_clients();
+	
 	for (int i = 0; i < CONF_CLIENTS_MAX; ++i) {
 		if (clients[i].cl_active && strcmp(clients[i].cl_name, name) == 0) {
-			return 1;
+			ret = 1;
+			break;
 		}
 	}
 	
-	return 0;
+	unlock_clients();
+	return ret;
 }
 
 void register_client(int sock, struct socket_message *sm) {
@@ -65,7 +98,7 @@ void register_client(int sock, struct socket_message *sm) {
 		return;
 	}
 	
-	zero_or_fail(pthread_mutex_lock(&clients_mx), "Cannot lock clients");
+	lock_clients();
 	
 	int id = client_freeid();
 	if (id < 0) {
@@ -86,11 +119,11 @@ void register_client(int sock, struct socket_message *sm) {
 		print_prompt();
 	}
 	
-	zero_or_fail(pthread_mutex_unlock(&clients_mx), "Cannot unlock clients");
+	unlock_clients();
 }
 
 void unregister_client(int client_id) {
-	zero_or_fail(pthread_mutex_lock(&clients_mx), "Cannot lock clients");
+	lock_clients();
 	
 	if (client_id >= 0) {
 		clients[client_id].cl_active = 0;
@@ -108,7 +141,7 @@ void unregister_client(int client_id) {
 		print_prompt();
 	}
 	
-	zero_or_fail(pthread_mutex_unlock(&clients_mx), "Cannot unlock clients");
+	unlock_clients();
 }
 
 void teardown_clients(void) {
@@ -133,17 +166,23 @@ void teardown_clients(void) {
 int free_cl = 0;
 
 int next_free_client(void) {
+	lock_clients();
+	
 	int from;
-	for(from = free_cl; from != free_cl + CONF_CLIENTS_MAX; ++from){
-		if(clients[from % CONF_CLIENTS_MAX].cl_active){
+	for (from = free_cl; from != free_cl + CONF_CLIENTS_MAX; ++from) {
+		if (clients[from % CONF_CLIENTS_MAX].cl_active) {
 			break;
 		}
 	}
 	
-	if(from == free_cl + CONF_CLIENTS_MAX) return -1;
+	if (from == free_cl + CONF_CLIENTS_MAX) {
+		unlock_clients();
+		return -1;
+	}
 	
 	from %= CONF_CLIENTS_MAX;
-	
 	free_cl = from + 1;
+	
+	unlock_clients();
 	return from;
 }

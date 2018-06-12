@@ -7,6 +7,13 @@
 #include <netinet/in.h>
 #include <netinet/ip.h>
 
+#define lock_clients() do { \
+		zero_or_fail(pthread_mutex_lock(&clients_mx), "Cannot lock clients") \
+	} while (0)
+#define unlock_clients() do { \
+		zero_or_fail(pthread_mutex_unlock(&clients_mx), "Cannot unlock clients") \
+	} while (0)
+
 #include "connection.h"
 
 int client_freeid(void);
@@ -18,5 +25,9 @@ void teardown_clients(void);
 int is_name_taken(const char *name);
 void register_client(int sock, struct socket_message *sm);
 void unregister_client(int client_id);
+
+
+void setup_client_mutex();
+void teardown_client_mutex();
 
 #endif

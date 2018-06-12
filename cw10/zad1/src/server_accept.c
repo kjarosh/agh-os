@@ -35,6 +35,12 @@ void cancel_accept_threads(void) {
 #ifndef CONF_DATAGRAM
 	pthread_cancel(thread_net);
 	pthread_cancel(thread_local);
+	
+	struct timespec ts;
+	ts.tv_sec = 1;
+	ts.tv_nsec = 0;
+	pthread_timedjoin_np(thread_net, NULL, &ts);
+	pthread_timedjoin_np(thread_local, NULL, &ts);
 #endif
 }
 

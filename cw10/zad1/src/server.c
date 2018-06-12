@@ -97,6 +97,9 @@ void cleanup(void) {
 	teardown_clients();
 	teardown_socks();
 	cancel_listener();
+	
+	// no one is using it
+	teardown_client_mutex();
 }
 
 void sighandler(int sig) {
@@ -116,6 +119,8 @@ int main(int argc, char **argv) {
 #else
 	printf("Server works on TCP\n");
 #endif
+	
+	setup_client_mutex();
 	
 	if (argc != 3) {
 		print_help(argv[0]);
