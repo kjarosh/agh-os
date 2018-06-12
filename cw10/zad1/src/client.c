@@ -19,6 +19,8 @@
 int server_sock;
 struct addr_t server_addr;
 
+int send_unregister = 1;
+
 static void sighandler(int sig) {
 	exit(0);
 }
@@ -28,11 +30,13 @@ static void cleanup(void) {
 	
 	printf("\rShutting down...\n");
 	
-	struct socket_message sm;
-	sm.addr = server_addr;
-	sm.length = 1;
-	sm.buffer[0] = MSG_TYPE_UNREGISTER;
-	send_sm(server_sock, &sm);
+	if (send_unregister) {
+		struct socket_message sm;
+		sm.addr = server_addr;
+		sm.length = 1;
+		sm.buffer[0] = MSG_TYPE_UNREGISTER;
+		send_sm(server_sock, &sm);
+	}
 	
 	shutdown(server_sock, SHUT_RDWR);
 	close(server_sock);
@@ -186,6 +190,7 @@ void receive_request(void) {
 		
 	case MSG_TYPE_SHUTDOWN:
 		printf("Server shutting down...\n");
+		send_unregister = 0;
 		exit(0);
 		
 	default:
