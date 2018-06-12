@@ -182,6 +182,10 @@ void receive_request(void) {
 		
 	case MSG_TYPE_NAMEINUSE:
 		printf("Error: name in use\n");
+		exit(1);
+		
+	case MSG_TYPE_SHUTDOWN:
+		printf("Server shutting down...\n");
 		exit(0);
 		
 	default:

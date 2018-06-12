@@ -115,6 +115,13 @@ void teardown_clients(void) {
 	for (int i = 0; i < CONF_CLIENTS_MAX; ++i) {
 		if (clients[i].cl_active) {
 			clients[i].cl_active = 0;
+			
+			struct socket_message sm;
+			sm.addr = clients[i].addr;
+			sm.length = 1;
+			sm.buffer[0] = MSG_TYPE_SHUTDOWN;
+			send_sm(clients[i].cl_sock, &sm);
+			
 #ifndef CONF_DATAGRAM
 			shutdown(clients[i].cl_sock, SHUT_RDWR);
 			close(clients[i].cl_sock);
